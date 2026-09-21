@@ -1,0 +1,1 @@
+ALTER TABLE "drafts" ADD COLUMN "style" text DEFAULT 'realistic' NOT NULL;
