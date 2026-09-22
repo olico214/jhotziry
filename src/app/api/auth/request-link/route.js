@@ -7,13 +7,19 @@ import { generateToken, hashToken } from "@/lib/auth/tokens";
 import { getDraftIdFromCookie } from "@/lib/auth/session";
 import { isAdminEmail } from "@/lib/auth/roles";
 import { sendMagicLink } from "@/lib/auth/mail";
+import { limitByIp, limitByKey } from "@/lib/security/rate-limit";
 import { APP_NAME } from "@/lib/config";
 
 const schema = z.object({
   email: z.string().trim().toLowerCase().email("Correo no válido"),
 });
 
+const GENERIC = { ok: true, delivered: true, preview: null };
+
 export async function POST(request) {
+  const ipLimited = limitByIp(request, "request-link:ip", 5, 15 * 60 * 1000);
+  if (ipLimited) return ipLimited;
+
   const payload = await request.json().catch(() => null);
   const parsed = schema.safeParse(payload);
 
@@ -25,6 +31,15 @@ export async function POST(request) {
   }
 
   const email = parsed.data.email;
+
+  const emailLimited = limitByKey(
+    "request-link:email",
+    email,
+    3,
+    15 * 60 * 1000,
+  );
+  if (emailLimited) return emailLimited;
+
   const shouldBeAdmin = isAdminEmail(email);
 
   let [user] = await db
@@ -33,6 +48,10 @@ export async function POST(request) {
     .where(eq(users.email, email))
     .limit(1);
 
+  if (!user && !shouldBeAdmin) {
+    return NextResponse.json(GENERIC);
+  }
+
   if (!user) {
     const welcome = Number(process.env.WELCOME_CREDITS || 0);
     [user] = await db
@@ -40,7 +59,7 @@ export async function POST(request) {
       .values({
         email,
         credits: welcome,
-        isAdmin: shouldBeAdmin,
+        isAdmin: true,
       })
       .returning();
 

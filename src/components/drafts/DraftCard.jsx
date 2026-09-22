@@ -6,7 +6,7 @@ export function DraftCard({ draft }) {
   const version = new Date(draft.updatedAt).getTime();
 
   return (
-    <article className="overflow-hidden rounded-4xl border border-blush-100 bg-white/70 p-4 shadow-sm transition-shadow hover:shadow-md">
+    <article className="overflow-hidden rounded-4xl border border-blush-100 glass p-4 shadow-sm transition-shadow hover:shadow-md">
       <div className="h-56">
         <ModelViewer
           modelUrl={`/api/files/${draft.id}?v=${version}`}

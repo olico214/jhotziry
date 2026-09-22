@@ -1,7 +1,14 @@
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { drafts, orders, users } from "@/lib/db/schema";
+import {
+  accessRequests,
+  drafts,
+  invitations,
+  orders,
+  posts,
+  users,
+} from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 
@@ -11,13 +18,16 @@ export const metadata = {
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
-  if (!user?.isAdmin) redirect("/?acceso=requerido");
+  if (!user?.isAdmin) notFound();
 
-  const [userRows, orderRows] = await Promise.all([
+  const [userRows, orderRows, invitationRows, requestRows, postRows] =
+    await Promise.all([
     db
       .select({
         id: users.id,
         email: users.email,
+        fullName: users.fullName,
+        address: users.address,
         isAdmin: users.isAdmin,
         credits: users.credits,
         createdAt: users.createdAt,
@@ -34,7 +44,56 @@ export default async function AdminPage() {
       .innerJoin(drafts, eq(drafts.id, orders.draftId))
       .innerJoin(users, eq(users.id, orders.userId))
       .orderBy(desc(orders.createdAt)),
+    db
+      .select()
+      .from(invitations)
+      .orderBy(desc(invitations.createdAt))
+      .limit(50),
+    db
+      .select()
+      .from(accessRequests)
+      .where(eq(accessRequests.status, "pending"))
+      .orderBy(desc(accessRequests.createdAt)),
+    db
+      .select({
+        id: posts.id,
+        title: posts.title,
+        body: posts.body,
+        tags: posts.tags,
+        image: posts.image,
+        featured: posts.featured,
+        status: posts.status,
+        createdAt: posts.createdAt,
+        author: users.fullName,
+        authorEmail: users.email,
+        likeCount:
+          sql`(select count(*) from post_likes pl where pl.post_id = ${posts.id})`.as(
+            "like_count",
+          ),
+        commentCount:
+          sql`(select count(*) from post_comments pc where pc.post_id = ${posts.id})`.as(
+            "comment_count",
+          ),
+      })
+      .from(posts)
+      .innerJoin(users, eq(users.id, posts.userId))
+      .orderBy(desc(posts.createdAt))
+      .limit(100),
   ]);
+
+  const serializedPosts = postRows.map((post) => ({
+    id: post.id,
+    title: post.title,
+    body: post.body,
+    tags: Array.isArray(post.tags) ? post.tags : [],
+    featured: post.featured,
+    status: post.status,
+    author: post.author || post.authorEmail,
+    hasImage: Boolean(post.image),
+    likeCount: Number(post.likeCount),
+    commentCount: Number(post.commentCount),
+    createdAt: new Date(post.createdAt).toISOString(),
+  }));
 
   return (
     <main className="mx-auto w-full max-w-6xl px-5 py-10">
@@ -47,7 +106,13 @@ export default async function AdminPage() {
         </p>
       </div>
 
-      <AdminDashboard users={userRows} orders={orderRows} />
+      <AdminDashboard
+        users={userRows}
+        orders={orderRows}
+        invitations={invitationRows}
+        accessRequests={requestRows}
+        posts={serializedPosts}
+      />
     </main>
   );
 }

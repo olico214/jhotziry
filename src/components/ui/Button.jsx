@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils";
 
 const variants = {
   primary:
-    "bg-blush-500 text-white shadow-lg shadow-blush-200 hover:bg-blush-600 hover:shadow-blush-300 active:scale-[.98]",
+    "bg-gradient-to-b from-blush-400 to-blush-600 text-white ring-1 ring-inset ring-white/40 shadow-lg shadow-blush-300/60 hover:from-blush-500 hover:to-blush-700 hover:shadow-blush-300 active:scale-[.98]",
   secondary:
-    "bg-white/80 text-ink border border-blush-200 hover:border-blush-300 hover:bg-white active:scale-[.98]",
+    "glass text-ink border border-blush-200 hover:border-blush-300 hover:bg-white active:scale-[.98]",
   ghost: "text-ink-soft hover:text-ink hover:bg-blush-50",
 };
 

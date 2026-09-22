@@ -1,15 +1,5 @@
-import { readBuffer } from "@/lib/storage/files";
-
 const BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-flash";
-
-const MIME_BY_EXT = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-};
 
 export function isEnhanceEnabled() {
   return (
@@ -28,7 +18,7 @@ Responde SOLO con un objeto JSON valido con esta forma exacta:
 }
 No incluyas texto fuera del JSON.`;
 
-async function chat(messages) {
+async function chat(messages, { json = true, temperature = 0.7 } = {}) {
   const response = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -39,8 +29,8 @@ async function chat(messages) {
       model: MODEL,
       messages,
       stream: false,
-      temperature: 0.7,
-      response_format: { type: "json_object" },
+      temperature,
+      ...(json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
 
@@ -88,11 +78,56 @@ export async function enhanceTextPrompt(idea, style = "realistic") {
   return parseResult(content);
 }
 
-export async function describeImagePrompt(imagePath) {
-  const buffer = await readBuffer(imagePath);
-  const extension = imagePath.slice(imagePath.lastIndexOf(".")).toLowerCase();
-  const mime = MIME_BY_EXT[extension] || "image/jpeg";
-  const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
+const IDEA_SYSTEM_PROMPT = `Eres el asistente creativo de una tienda de figuras personalizadas.
+Tu tarea es tomar una idea corta del cliente y convertirla en una descripcion clara y detallada de la imagen que quiere generar, para que el cliente entienda exactamente lo que necesita.
+
+Reglas:
+- Escribe en espanol, con tono calido y claro.
+- Respeta siempre el estilo visual que se te indica.
+- Empieza con un parrafo breve (2-3 frases) que describa la escena principal.
+- Despues incluye una lista con guiones de detalles clave: sujeto, pose y expresion, ropa o accesorios, colores, fondo, estilo y un detalle especial.
+- Si falta informacion, propone opciones creativas y razonables.
+- No menciones que eres una IA ni pidas mas datos.
+- Devuelve solo el texto, sin titulos de nivel y sin comillas envolventes.
+- Maximo 180 palabras.`;
+
+const IMAGE_EXTRA_PROMPT = `Eres director de arte de figuras para impresion.
+Recibes una instruccion corta del cliente para modificar una FOTO (accesorios, ropa, escena, estilo) y debes devolverla como una instruccion tecnica en INGLES para un modelo image-to-image.
+
+Reglas:
+- Devuelve SOLO la instruccion en ingles, en una sola linea, sin comillas ni explicaciones.
+- No cambies la identidad del sujeto; solo aplica los cambios pedidos.
+- Maximo 40 palabras.`;
+
+export async function enhanceImagePrompt(userPrompt) {
+  const content = await chat(
+    [
+      { role: "system", content: IMAGE_EXTRA_PROMPT },
+      { role: "user", content: `Instruccion del cliente: "${userPrompt}"` },
+    ],
+    { json: false, temperature: 0.5 },
+  );
+  return content.trim();
+}
+
+export async function expandIdea(idea, style = "cartoon") {
+  const content = await chat(
+    [
+      { role: "system", content: IDEA_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `Idea del cliente: "${idea}"\nEstilo visual deseado: ${
+          STYLE_LABELS[style] || STYLE_LABELS.cartoon
+        }.`,
+      },
+    ],
+    { json: false, temperature: 0.8 },
+  );
+  return content.trim();
+}
+
+export async function describeImagePrompt(buffer, mime = "image/jpeg") {
+  const dataUrl = `data:${mime};base64,${Buffer.from(buffer).toString("base64")}`;
 
   const content = await chat([
     { role: "system", content: SYSTEM_PROMPT },

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { QuoteModal } from "./QuoteModal";
-import { APP_NAME, APP_TAGLINE } from "@/lib/config";
+import { APP_NAME, APP_TAGLINE, CREDITS_PER_IMAGE } from "@/lib/config";
 
 const notices = {
   expirado: "El enlace ya expiró. Solicita uno nuevo al guardar tu diseño.",
@@ -71,7 +71,7 @@ const features = [
   },
 ];
 
-export function Landing({ accessNotice }) {
+export function Landing({ accessNotice, featured = [] }) {
   const [quoteOpen, setQuoteOpen] = useState(false);
   const notice = accessNotice ? notices[accessNotice] : null;
 
@@ -88,7 +88,7 @@ export function Landing({ accessNotice }) {
         />
 
         <div className="relative flex w-full max-w-2xl flex-col items-center gap-8 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-blush-200 bg-white/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-blush-600">
+          <span className="inline-flex items-center gap-2 rounded-full border border-blush-200 glass px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-blush-600">
             <Sparkles className="h-3.5 w-3.5" />
             {APP_TAGLINE}
           </span>
@@ -125,10 +125,15 @@ export function Landing({ accessNotice }) {
           </div>
 
           {notice ? (
-            <p className="rounded-2xl bg-white/80 px-5 py-3 text-sm text-ink-soft shadow-sm">
+            <p className="rounded-2xl glass px-5 py-3 text-sm text-ink-soft shadow-sm">
               {notice}
             </p>
           ) : null}
+
+          <p className="text-xs font-semibold text-blush-600">
+            Cada imagen generada cuesta {CREDITS_PER_IMAGE} créditos · eliges el
+            estilo Caricatura
+          </p>
         </div>
       </section>
 
@@ -147,7 +152,7 @@ export function Landing({ accessNotice }) {
               return (
                 <div
                   key={step.title}
-                  className="rounded-4xl border border-blush-100 bg-white/70 p-5 shadow-sm"
+                  className="rounded-4xl border border-blush-100 glass p-5 shadow-sm"
                 >
                   <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blush-100 text-blush-600">
                     <Icon className="h-5 w-5" />
@@ -165,6 +170,63 @@ export function Landing({ accessNotice }) {
         </div>
       </section>
 
+      {featured.length > 0 ? (
+        <section className="px-5 pb-16">
+          <div className="mx-auto w-full max-w-5xl">
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-extrabold tracking-tight text-ink">
+                  Destacados de la comunidad
+                </h2>
+                <p className="mt-1 text-sm text-ink-soft">
+                  Creaciones favoritas de nuestra tienda.
+                </p>
+              </div>
+              <Link
+                href="/blog"
+                className="text-sm font-semibold text-blush-600 hover:underline"
+              >
+                Ver el blog
+              </Link>
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-3">
+              {featured.map((post) => (
+                <Link
+                  key={post.id}
+                  href="/blog"
+                  className="overflow-hidden rounded-4xl border border-blush-100 glass shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <div className="flex h-48 items-center justify-center glass-soft">
+                    {post.hasImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/api/posts/${post.id}/image`}
+                        alt={post.title || "Destacado"}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+                  <div className="p-4">
+                    <p className="line-clamp-1 text-sm font-bold text-ink">
+                      {post.title || "Creación"}
+                    </p>
+                    {post.body ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-ink-soft">
+                        {post.body}
+                      </p>
+                    ) : null}
+                    <p className="mt-2 text-xs text-ink-soft">
+                      {post.author || "Anónimo"} · ♥ {post.likeCount}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="px-5 pb-16">
         <div className="mx-auto w-full max-w-5xl">
           <div className="grid gap-5 sm:grid-cols-2">
@@ -173,7 +235,7 @@ export function Landing({ accessNotice }) {
               return (
                 <div
                   key={feature.title}
-                  className="flex gap-4 rounded-4xl border border-blush-100 bg-white/70 p-6 shadow-sm"
+                  className="flex gap-4 rounded-4xl border border-blush-100 glass p-6 shadow-sm"
                 >
                   <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-3xl bg-blush-200/60 text-blush-700">
                     <Icon className="h-6 w-6" />

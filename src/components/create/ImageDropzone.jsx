@@ -4,10 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { ImagePlus, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Field";
 import { cn } from "@/lib/utils";
+
+const examples = [
+  "de astronauta",
+  "con corona y capa de superhéroe",
+  "estilo acuarela suave",
+];
 
 export function ImageDropzone({ onGenerate, busy }) {
   const [file, setFile] = useState(null);
+  const [prompt, setPrompt] = useState("");
 
   const preview = useMemo(
     () => (file ? URL.createObjectURL(file) : null),
@@ -37,8 +45,8 @@ export function ImageDropzone({ onGenerate, busy }) {
         className={cn(
           "flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-4xl border-2 border-dashed px-6 py-8 text-center transition-colors",
           isDragActive
-            ? "border-blush-400 bg-blush-50"
-            : "border-blush-200 bg-blush-50/40 hover:border-blush-300",
+            ? "border-blush-400 glass-soft"
+            : "border-blush-200 glass-soft hover:border-blush-300",
         )}
       >
         <input {...getInputProps()} />
@@ -60,10 +68,39 @@ export function ImageDropzone({ onGenerate, busy }) {
           </p>
           <p className="text-xs text-ink-soft">
             {file
-              ? "Puedes cambiarla soltando otra"
+              ? "La convertiremos en una caricatura parecida"
               : "De tu mascota, un ser querido o tu propio dibujo"}
           </p>
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-ink">
+          Personaliza (opcional)
+        </label>
+        <Textarea
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          rows={3}
+          maxLength={500}
+          placeholder="Cuéntanos cambios: “de astronauta”, “con sombrero y globos”, “estilo acuarela”…"
+        />
+        <div className="mt-2 flex flex-wrap gap-2">
+          {examples.map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => setPrompt(example)}
+              className="rounded-full border border-blush-200 glass px-3 py-1.5 text-xs text-ink-soft transition-colors hover:text-ink"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-xs text-ink-soft">
+          Si lo dejas vacío, haremos una caricatura por defecto. Se suma al estilo
+          Caricatura.
+        </p>
       </div>
 
       <Button
@@ -71,18 +108,18 @@ export function ImageDropzone({ onGenerate, busy }) {
         size="lg"
         className="w-full"
         disabled={!file}
-        onClick={() => file && onGenerate(file)}
+        onClick={() => file && onGenerate(file, prompt.trim())}
       >
         {busy ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <Sparkles className="h-4 w-4" />
         )}
-        Usar esta foto
+        Convertir a caricatura
       </Button>
 
       {busy ? (
-        <p className="rounded-2xl bg-blush-50 px-4 py-3 text-xs text-ink-soft">
+        <p className="rounded-2xl glass-soft px-4 py-3 text-xs text-ink-soft">
           Puedes seguir creando mientras esperamos. Te avisaremos por correo
           cuando tu vista previa esté lista.
         </p>

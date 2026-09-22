@@ -14,11 +14,11 @@ const ViewerCanvas = dynamic(() => import("./ViewerCanvas"), {
 
 export function ModelViewer({ modelUrl, status, progress }) {
   return (
-    <div className="relative h-full min-h-[340px] w-full overflow-hidden rounded-4xl border border-blush-100 bg-blush-50 shadow-inner">
+    <div className="relative h-full min-h-[340px] w-full overflow-hidden rounded-4xl border border-blush-100 glass-soft shadow-inner">
       <ViewerCanvas modelUrl={modelUrl} />
 
       {status === "generating" ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/70 backdrop-blur-sm">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 glass backdrop-blur-sm">
           <p className="text-sm font-semibold text-ink">
             Dando forma a tu idea…
           </p>
@@ -34,7 +34,7 @@ export function ModelViewer({ modelUrl, status, progress }) {
 
       {status === "idle" ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-5 flex justify-center">
-          <p className="rounded-full bg-white/80 px-4 py-2 text-xs text-ink-soft">
+          <p className="rounded-full glass px-4 py-2 text-xs text-ink-soft">
             Tu boceto 3D aparecerá aquí
           </p>
         </div>

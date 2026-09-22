@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 const base =
-  "w-full rounded-2xl border border-blush-200 bg-blush-50/50 px-4 py-3 text-sm text-ink placeholder:text-ink-soft/60 transition-colors focus:border-blush-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blush-200";
+  "w-full rounded-2xl border border-blush-200 glass-soft px-4 py-3 text-sm text-ink placeholder:text-ink-soft/60 transition-colors focus:border-blush-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blush-200";
 
 export function Input({ className, ...props }) {
   return <input className={cn(base, className)} {...props} />;

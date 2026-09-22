@@ -3,6 +3,14 @@ import * as tripo from "./tripo";
 
 const MOCK_ESTIMATED_MS = 6000;
 
+const CARICATURE_PROMPT =
+  "Transform this photo into a cute 3D cartoon caricature of the same subject. " +
+  "Keep the subject recognizable: same identity, hairstyle, clothing and colors, " +
+  "but exaggerate the proportions in a fun way (slightly bigger head, expressive eyes, " +
+  "friendly smile). Smooth pastel colors, soft studio lighting, clean simple background, " +
+  "stylized collectible figurine look ready to be turned into a 3D printable model. " +
+  "Do not change who the subject is.";
+
 function tripoEnabled() {
   const configured = (process.env.AI_PROVIDER || "mock") === "tripo";
   return configured && tripo.isConfigured();
@@ -21,6 +29,18 @@ const tripoProvider = {
       buffer: imageBuffer,
       extension: imageExtension,
     });
+
+    if (mode === "image_style") {
+      const finalPrompt = prompt
+        ? `${CARICATURE_PROMPT} Additional instructions from the user (apply them while keeping the caricature style and the same subject): ${prompt}`
+        : CARICATURE_PROMPT;
+      const taskId = await tripo.createImageToImage({
+        fileToken,
+        prompt: finalPrompt,
+      });
+      return { stage: "image_gen", providerTaskId: taskId };
+    }
+
     const taskId = await tripo.createImageToModel({
       fileToken,
       extension: imageExtension,
@@ -44,7 +64,9 @@ const tripoProvider = {
     }
 
     if (stage === "image_gen") {
-      const buffer = await tripo.downloadBuffer(task.output.generated_image_url);
+      const url =
+        task.output.generated_image_url || task.output.model_url || null;
+      const buffer = await tripo.downloadBuffer(url);
       return {
         status: "succeeded",
         progress: 100,
@@ -68,10 +90,10 @@ const mockProvider = {
   estimatedMillis: MOCK_ESTIMATED_MS,
 
   async start({ mode }) {
-    if (mode === "text") {
-      return { stage: "image_gen", providerTaskId: `mock-${Date.now()}` };
+    if (mode === "model") {
+      return { stage: "model_gen", providerTaskId: `mock-model-${Date.now()}` };
     }
-    return { stage: "model_gen", providerTaskId: `mock-model-${Date.now()}` };
+    return { stage: "image_gen", providerTaskId: `mock-${mode}-${Date.now()}` };
   },
 
   async step({ stage, prompt, elapsedMs }) {

@@ -5,6 +5,7 @@ import { Paperclip } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormError, Input, Label, Textarea } from "@/components/ui/Field";
+import { apiFetch } from "@/lib/api-client";
 
 export function QuoteModal({ open, onOpenChange }) {
   const formRef = useRef(null);
@@ -19,12 +20,15 @@ export function QuoteModal({ open, onOpenChange }) {
     setError(null);
 
     try {
-      const response = await fetch("/api/quote", {
+      const response = await apiFetch("/api/quote", {
         method: "POST",
         body: new FormData(event.currentTarget),
       });
       const data = await response.json();
 
+      if (response.status === 401) {
+        throw new Error("Inicia sesión para solicitar tu cotización.");
+      }
       if (!response.ok) throw new Error(data.error || "No pudimos enviar la solicitud");
       setDone(true);
     } catch (submitError) {
@@ -93,7 +97,7 @@ export function QuoteModal({ open, onOpenChange }) {
             <Label htmlFor="quote-file">Diseño propio (opcional)</Label>
             <label
               htmlFor="quote-file"
-              className="flex cursor-pointer items-center gap-2 rounded-2xl border border-dashed border-blush-300 bg-blush-50/50 px-4 py-3 text-sm text-ink-soft transition-colors hover:border-blush-400 hover:bg-blush-50"
+              className="flex cursor-pointer items-center gap-2 rounded-2xl border border-dashed border-blush-300 glass-soft px-4 py-3 text-sm text-ink-soft transition-colors hover:border-blush-400 hover:bg-blush-50"
             >
               <Paperclip className="h-4 w-4 text-blush-500" />
               {fileName || "Adjunta un .stl, .obj, .glb o una foto"}
@@ -106,6 +110,16 @@ export function QuoteModal({ open, onOpenChange }) {
               onChange={(event) =>
                 setFileName(event.target.files?.[0]?.name ?? null)
               }
+            />
+          </div>
+
+          <div className="hidden" aria-hidden="true">
+            <label htmlFor="quote-website">No completar</label>
+            <input
+              id="quote-website"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
             />
           </div>
 

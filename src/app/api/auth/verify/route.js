@@ -10,6 +10,11 @@ import {
   issueSession,
   sessionCookieOptions,
 } from "@/lib/auth/session";
+import {
+  CSRF_COOKIE,
+  createCsrfForSession,
+  csrfCookieOptions,
+} from "@/lib/auth/csrf";
 
 export async function GET(request) {
   const url = new URL(request.url);
@@ -46,18 +51,24 @@ export async function GET(request) {
     .set({ verifiedAt: new Date() })
     .where(eq(users.id, link.userId));
 
-  const { token: sessionToken, expiresAt } = await issueSession(link.userId);
+  const {
+    token: sessionToken,
+    expiresAt,
+    sessionId,
+  } = await issueSession(link.userId);
+  const csrfToken = await createCsrfForSession(sessionId);
 
   const draftId = draftParam || (await getDraftIdFromCookie());
   const claimed = await claimDraft(draftId, link.userId);
 
-  const destination = claimed ? "/mis-disenos" : "/crear";
+  const destination = claimed ? "/mis-pedidos" : "/crear";
   const response = NextResponse.redirect(new URL(destination, base));
   response.cookies.set(
     SESSION_COOKIE,
     sessionToken,
     sessionCookieOptions(expiresAt),
   );
+  response.cookies.set(CSRF_COOKIE, csrfToken, csrfCookieOptions());
 
   return response;
 }

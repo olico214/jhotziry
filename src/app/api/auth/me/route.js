@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
+import { ensureCsrf } from "@/lib/auth/csrf";
 
 export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ user: null });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ user: null });
+
+  await ensureCsrf(session);
+
   return NextResponse.json({
     user: {
-      id: user.id,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      credits: user.credits,
+      id: session.userId,
+      email: session.email,
+      fullName: session.fullName,
+      address: session.address,
+      isAdmin: session.isAdmin,
+      credits: session.credits,
     },
   });
 }

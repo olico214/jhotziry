@@ -8,13 +8,25 @@ import {
   generationJobs,
   users,
 } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/guard";
+import { limitByKey } from "@/lib/security/rate-limit";
 import { resolveUserDraft } from "@/lib/db/drafts";
 import { getProvider } from "@/lib/ai/provider";
 import { enhanceTextPrompt, isEnhanceEnabled } from "@/lib/ai/deepseek";
 import { ensureRunner } from "@/lib/jobs/runner";
 
 const CREDITS_PER_PREVIEW = Number(process.env.CREDITS_PER_PREVIEW || 5);
+
+const STYLE_TAGS = {
+  realistic: "photorealistic, realistic look, natural materials",
+  anime: "anime style, manga illustration",
+  cartoon: "cartoon caricature style, 3d animated movie look",
+};
+
+function withStyle(prompt, style) {
+  const tag = STYLE_TAGS[style];
+  return tag ? `${prompt}. Style: ${tag}` : prompt;
+}
 
 const bodySchema = z.object({
   draftId: z.string().uuid().nullish(),
@@ -27,13 +39,12 @@ const bodySchema = z.object({
 });
 
 export async function POST(request) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: "Inicia sesión para generar tu vista previa." },
-      { status: 401 },
-    );
-  }
+  const guard = await requireUser(request);
+  if (guard.error) return guard.error;
+  const { user } = guard;
+
+  const limited = limitByKey("generate:text", user.id, 10, 60 * 60 * 1000);
+  if (limited) return limited;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -76,6 +87,7 @@ export async function POST(request) {
       enhancedPrompt: enhanced?.prompt ?? null,
       aiSummary: enhanced?.summary ?? null,
       previewPath: null,
+      previewImage: null,
       modelPath: null,
       status: "generating",
       updatedAt: new Date(),
@@ -113,7 +125,7 @@ export async function POST(request) {
     .values({
       draftId: draft.id,
       type: "text",
-      status: "processing",
+      status: "queued",
       progress: 0,
       provider: provider.name,
     })
@@ -122,12 +134,17 @@ export async function POST(request) {
   try {
     const { stage, providerTaskId } = await provider.start({
       mode: "text",
-      prompt: enhanced?.prompt || parsed.data.prompt,
+      prompt: withStyle(enhanced?.prompt || parsed.data.prompt, style),
     });
 
     await db
       .update(generationJobs)
-      .set({ stage, providerJobId: providerTaskId, updatedAt: new Date() })
+      .set({
+        stage,
+        providerJobId: providerTaskId,
+        status: "processing",
+        updatedAt: new Date(),
+      })
       .where(eq(generationJobs.id, job.id));
 
     return NextResponse.json({
@@ -159,6 +176,10 @@ export async function POST(request) {
       .set({ status: "failed", updatedAt: new Date() })
       .where(eq(drafts.id, draft.id));
 
-    return NextResponse.json({ error: error.message }, { status: 502 });
+    console.error("[generate:text] start error:", error.message);
+    return NextResponse.json(
+      { error: "No pudimos iniciar la generación. Inténtalo de nuevo." },
+      { status: 502 },
+    );
   }
 }

@@ -8,7 +8,7 @@ export const useDraftStore = create(
     (set) => ({
       draftId: null,
       mode: "text",
-      style: "realistic",
+      style: "cartoon",
       prompt: "",
       lastPrompt: null,
       jobId: null,

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api-client";
 import { useDraftStore } from "@/lib/store/draft-store";
 
 export function useGeneration() {
@@ -16,7 +17,7 @@ export function useGeneration() {
   const query = useQuery({
     queryKey: ["job", jobId],
     queryFn: async () => {
-      const response = await fetch(`/api/jobs/${jobId}`, { cache: "no-store" });
+      const response = await apiFetch(`/api/jobs/${jobId}`, { cache: "no-store" });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || "No se pudo consultar el estado");
@@ -48,13 +49,21 @@ export function useGeneration() {
     }
   }, [query.data, queryClient]);
 
+  useEffect(() => {
+    if (query.error) {
+      useDraftStore
+        .getState()
+        .setError(query.error.message || "No pudimos consultar el estado");
+    }
+  }, [query.error]);
+
   const startText = async (prompt) => {
     const draftId = useDraftStore.getState().draftId;
     const style = useDraftStore.getState().style;
     const body = { prompt, style };
     if (draftId) body.draftId = draftId;
 
-    const response = await fetch("/api/generate/text", {
+    const response = await apiFetch("/api/generate/text", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -77,13 +86,14 @@ export function useGeneration() {
     return { started: true };
   };
 
-  const startImage = async (file) => {
+  const startImage = async (file, prompt) => {
     const draftId = useDraftStore.getState().draftId;
     const form = new FormData();
     if (draftId) form.set("draftId", draftId);
     form.set("image", file);
+    if (prompt) form.set("prompt", prompt);
 
-    const response = await fetch("/api/generate/image", {
+    const response = await apiFetch("/api/generate/image", {
       method: "POST",
       body: form,
     });
@@ -91,13 +101,17 @@ export function useGeneration() {
 
     if (response.status === 401) return { authRequired: true };
     if (!response.ok) {
-      useDraftStore.getState().setError(data.error || "Error al subir la imagen");
+      useDraftStore.getState().setError(data.error || "Error al procesar la foto");
       return { error: data.error };
     }
 
-    const store = useDraftStore.getState();
-    store.setDraftId(data.draftId);
-    store.setReady({ previewUrl: data.previewUrl, summary: data.summary });
+    useDraftStore.getState().startJob({
+      jobId: data.jobId,
+      draftId: data.draftId,
+      mode: "image",
+      prompt: null,
+    });
+    queryClient.invalidateQueries({ queryKey: ["session"] });
     return { started: true };
   };
 

@@ -1,25 +1,32 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
-import { drafts } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { creditTransactions, drafts, generationJobs, users } from "@/lib/db/schema";
 import { resolveUserDraft } from "@/lib/db/drafts";
-import { describeImagePrompt, isEnhanceEnabled } from "@/lib/ai/deepseek";
-import { extensionFor, saveBuffer } from "@/lib/storage/files";
+import { requireUser } from "@/lib/auth/guard";
+import { limitByKey } from "@/lib/security/rate-limit";
+import { getProvider } from "@/lib/ai/provider";
+import { describeImagePrompt, enhanceImagePrompt, isEnhanceEnabled } from "@/lib/ai/deepseek";
+import { ensureRunner } from "@/lib/jobs/runner";
+import { extensionFor } from "@/lib/storage/files";
+import {
+  imageRecordFromBuffer,
+  mimeFromExtension,
+} from "@/lib/storage/images";
 
+const CREDITS_PER_PREVIEW = Number(process.env.CREDITS_PER_PREVIEW || 5);
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const draftIdSchema = z.string().uuid().nullish();
 
 export async function POST(request) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: "Inicia sesión para guardar tu foto." },
-      { status: 401 },
-    );
-  }
+  const guard = await requireUser(request);
+  if (guard.error) return guard.error;
+  const { user } = guard;
+
+  const limited = limitByKey("generate:image", user.id, 10, 60 * 60 * 1000);
+  if (limited) return limited;
 
   const form = await request.formData().catch(() => null);
   if (!form) {
@@ -55,18 +62,42 @@ export async function POST(request) {
     );
   }
 
+  if (user.credits < CREDITS_PER_PREVIEW) {
+    return NextResponse.json(
+      {
+        error:
+          "No tienes créditos suficientes. Pídele al administrador que te recargue.",
+      },
+      { status: 402 },
+    );
+  }
+
   const draft = await resolveUserDraft(
     user.id,
     draftId.success ? draftId.data : undefined,
   );
 
-  const sourcePath = `uploads/${draft.id}/original${extension}`;
-  await saveBuffer(sourcePath, Buffer.from(await file.arrayBuffer()));
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const mime = mimeFromExtension(extension);
+
+  const userPrompt = String(form.get("prompt") || "").trim().slice(0, 500);
 
   let summary = null;
+  let extraPrompt = null;
+  if (userPrompt) extraPrompt = userPrompt;
+
   if (isEnhanceEnabled()) {
+    if (userPrompt) {
+      try {
+        const enhanced = await enhanceImagePrompt(userPrompt);
+        if (enhanced) extraPrompt = enhanced;
+      } catch (error) {
+        console.error("[ai] DeepSeek no disponible:", error.message);
+      }
+    }
+
     try {
-      const described = await describeImagePrompt(sourcePath);
+      const described = await describeImagePrompt(buffer, mime);
       summary = described?.summary ?? null;
     } catch (error) {
       console.error("[ai] DeepSeek no disponible:", error.message);
@@ -77,20 +108,107 @@ export async function POST(request) {
     .update(drafts)
     .set({
       mode: "image",
-      prompt: null,
-      enhancedPrompt: null,
+      style: "cartoon",
+      prompt: userPrompt || null,
+      enhancedPrompt: userPrompt ? extraPrompt : null,
       aiSummary: summary,
-      sourceImagePath: sourcePath,
-      previewPath: sourcePath,
+      sourceImage: imageRecordFromBuffer(buffer, mime),
+      sourceImagePath: null,
+      previewImage: null,
+      previewPath: null,
       modelPath: null,
-      status: "ready",
+      status: "generating",
       updatedAt: new Date(),
     })
     .where(eq(drafts.id, draft.id));
 
-  return NextResponse.json({
-    draftId: draft.id,
-    previewUrl: `/api/preview/${draft.id}?v=${Date.now()}`,
-    summary,
+  const [debited] = await db
+    .update(users)
+    .set({ credits: sql`${users.credits} - ${CREDITS_PER_PREVIEW}` })
+    .where(
+      and(eq(users.id, user.id), gte(users.credits, CREDITS_PER_PREVIEW)),
+    )
+    .returning({ credits: users.credits });
+
+  if (!debited) {
+    return NextResponse.json(
+      { error: "No tienes créditos suficientes." },
+      { status: 402 },
+    );
+  }
+
+  await db.insert(creditTransactions).values({
+    userId: user.id,
+    amount: -CREDITS_PER_PREVIEW,
+    balanceAfter: debited.credits,
+    reason: "Caricatura de foto",
   });
+
+  const provider = getProvider();
+  ensureRunner();
+
+  const [job] = await db
+    .insert(generationJobs)
+    .values({
+      draftId: draft.id,
+      type: "image",
+      status: "queued",
+      progress: 0,
+      provider: provider.name,
+    })
+    .returning();
+
+  try {
+    const { stage, providerTaskId } = await provider.start({
+      mode: "image_style",
+      imageBuffer: buffer,
+      imageExtension: extension,
+      prompt: extraPrompt,
+    });
+
+    await db
+      .update(generationJobs)
+      .set({
+        stage,
+        providerJobId: providerTaskId,
+        status: "processing",
+        updatedAt: new Date(),
+      })
+      .where(eq(generationJobs.id, job.id));
+
+    return NextResponse.json({
+      draftId: draft.id,
+      jobId: job.id,
+      credits: debited.credits,
+    });
+  } catch (error) {
+    const [refunded] = await db
+      .update(users)
+      .set({ credits: sql`${users.credits} + ${CREDITS_PER_PREVIEW}` })
+      .where(eq(users.id, user.id))
+      .returning({ credits: users.credits });
+
+    await db.insert(creditTransactions).values({
+      userId: user.id,
+      amount: CREDITS_PER_PREVIEW,
+      balanceAfter: refunded?.credits ?? user.credits,
+      reason: "Reembolso por error de generación",
+    });
+
+    await db
+      .update(generationJobs)
+      .set({ status: "failed", error: error.message, updatedAt: new Date() })
+      .where(eq(generationJobs.id, job.id));
+
+    await db
+      .update(drafts)
+      .set({ status: "failed", updatedAt: new Date() })
+      .where(eq(drafts.id, draft.id));
+
+    console.error("[generate:image] start error:", error.message);
+    return NextResponse.json(
+      { error: "No pudimos iniciar la generación. Inténtalo de nuevo." },
+      { status: 502 },
+    );
+  }
 }

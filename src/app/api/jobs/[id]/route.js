@@ -13,9 +13,10 @@ function serialize(job, draft, isAdmin) {
     draftId: job.draftId,
     status: job.status,
     progress: job.progress,
-    previewUrl: draft?.previewPath
-      ? `/api/preview/${draft.id}?v=${version}`
-      : null,
+    previewUrl:
+      draft?.previewImage || draft?.previewPath
+        ? `/api/preview/${draft.id}?v=${version}`
+        : null,
     modelUrl:
       isAdmin && job.status === "succeeded" && draft?.modelPath
         ? `/api/files/${draft.id}?v=${version}`

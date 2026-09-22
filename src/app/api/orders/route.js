@@ -2,21 +2,33 @@ import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
-import { drafts, orders } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { drafts, orderEvents, orders } from "@/lib/db/schema";
+import { requireUser } from "@/lib/auth/guard";
+import { limitByKey } from "@/lib/security/rate-limit";
+import { adminEmails } from "@/lib/auth/roles";
+import {
+  sendNewOrderEmail,
+  sendOrderConfirmationEmail,
+} from "@/lib/auth/mail";
+import { APP_NAME } from "@/lib/config";
 
 const schema = z.object({
   draftId: z.string().uuid(),
-  name: z.string().trim().min(2, "Escribe tu nombre").max(120),
+  name: z.string().trim().min(2, "Escribe el nombre de quien recibe").max(160),
   email: z.string().trim().email("Correo no válido"),
+  address: z.string().trim().min(5, "Escribe el domicilio").max(300),
+  description: z.string().trim().max(1000).optional(),
+  quantity: z.coerce.number().int().min(1).max(999).optional(),
   notes: z.string().trim().max(1000).optional(),
 });
 
 export async function POST(request) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Inicia sesión para continuar" }, { status: 401 });
-  }
+  const guard = await requireUser(request);
+  if (guard.error) return guard.error;
+  const { user } = guard;
+
+  const limited = limitByKey("orders:create", user.id, 30, 60 * 60 * 1000);
+  if (limited) return limited;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -36,7 +48,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Diseño no encontrado" }, { status: 404 });
   }
 
-  if (!draft.previewPath) {
+  if (!draft.previewImage && !draft.previewPath) {
     return NextResponse.json(
       { error: "Primero genera una vista previa" },
       { status: 400 },
@@ -50,18 +62,44 @@ export async function POST(request) {
       draftId: draft.id,
       name: parsed.data.name,
       email: parsed.data.email,
+      address: parsed.data.address,
+      description: parsed.data.description ?? null,
+      quantity: parsed.data.quantity ?? 1,
       notes: parsed.data.notes ?? null,
     })
     .returning({ id: orders.id });
 
+  await db.insert(orderEvents).values({
+    orderId: order.id,
+    status: "new",
+    note: "Pedido recibido",
+  });
+
+  const base = process.env.APP_URL || new URL(request.url).origin;
+  const summary = {
+    name: parsed.data.name,
+    email: parsed.data.email,
+    address: parsed.data.address,
+    description: parsed.data.description ?? null,
+    quantity: parsed.data.quantity ?? 1,
+    adminUrl: `${base}/admin`,
+    ordersUrl: `${base}/mis-pedidos`,
+  };
+
+  await Promise.all([
+    sendNewOrderEmail(adminEmails(), summary, APP_NAME).catch(() => {}),
+    sendOrderConfirmationEmail(parsed.data.email, summary, APP_NAME).catch(
+      () => {},
+    ),
+  ]);
+
   return NextResponse.json({ ok: true, orderId: order.id });
 }
 
-export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-  }
+export async function GET(request) {
+  const guard = await requireUser(request, { csrf: false });
+  if (guard.error) return guard.error;
+  const { user } = guard;
 
   const rows = await db
     .select()

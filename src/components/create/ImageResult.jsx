@@ -2,7 +2,7 @@
 
 export function ImageResult({ previewUrl, status, progress }) {
   return (
-    <div className="relative h-full min-h-[340px] w-full overflow-hidden rounded-4xl border border-blush-100 bg-blush-50 shadow-inner">
+    <div className="relative h-full min-h-[340px] w-full overflow-hidden rounded-4xl border border-blush-100 glass-soft shadow-inner">
       {previewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -20,7 +20,7 @@ export function ImageResult({ previewUrl, status, progress }) {
       )}
 
       {status === "generating" ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/75 backdrop-blur-sm">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 glass backdrop-blur-sm">
           <p className="text-sm font-semibold text-ink">
             Dando forma a tu idea…
           </p>

@@ -88,6 +88,19 @@ export async function createImageToModel({ fileToken, extension }) {
   return data.task_id;
 }
 
+export async function createImageToImage({ fileToken, prompt }) {
+  const data = await tripoFetch("/generation/image-to-image", {
+    method: "POST",
+    body: JSON.stringify({
+      input: fileToken,
+      prompt,
+      model: process.env.TRIPO_IMAGE_MODEL || "seedream_v5",
+      size: process.env.TRIPO_IMAGE_SIZE || "2K",
+    }),
+  });
+  return data.task_id;
+}
+
 export async function getTask(taskId) {
   const data = await tripoFetch(`/tasks/${taskId}`, { method: "GET" });
   return {

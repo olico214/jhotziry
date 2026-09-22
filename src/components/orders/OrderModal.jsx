@@ -4,14 +4,9 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormError, Input, Label, Textarea } from "@/components/ui/Field";
+import { apiFetch } from "@/lib/api-client";
 
-const ORDER_COPY = {
-  title: "Solicitar mi pieza impresa",
-  description:
-    "Nos pondremos en contacto para confirmar tamaño, material, precio y envío. Convertiremos tu imagen en el modelo 3D al confirmar el pedido.",
-};
-
-export function OrderModal({ open, onOpenChange, draftId, defaultEmail }) {
+export function OrderModal({ open, onOpenChange, draftId, user }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(false);
@@ -24,13 +19,16 @@ export function OrderModal({ open, onOpenChange, draftId, defaultEmail }) {
     const form = new FormData(event.currentTarget);
 
     try {
-      const response = await fetch("/api/orders", {
+      const response = await apiFetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           draftId,
           name: form.get("name"),
           email: form.get("email"),
+          address: form.get("address"),
+          description: form.get("description"),
+          quantity: form.get("quantity"),
           notes: form.get("notes"),
         }),
       });
@@ -56,8 +54,8 @@ export function OrderModal({ open, onOpenChange, draftId, defaultEmail }) {
     <Modal
       open={open}
       onOpenChange={handleOpenChange}
-      title={ORDER_COPY.title}
-      description={ORDER_COPY.description}
+      title="Solicitar mi pieza impresa"
+      description="Usamos tus datos de registro. Si es un regalo, cambia el nombre y el domicilio."
     >
       {done ? (
         <div className="space-y-5 text-center">
@@ -72,8 +70,25 @@ export function OrderModal({ open, onOpenChange, draftId, defaultEmail }) {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="order-name">Tu nombre</Label>
-            <Input id="order-name" name="name" required placeholder="Ana Pérez" />
+            <Label htmlFor="order-name">Recibe</Label>
+            <Input
+              id="order-name"
+              name="name"
+              required
+              defaultValue={user?.fullName || ""}
+              placeholder="Ana Pérez"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="order-address">Domicilio de entrega</Label>
+            <Input
+              id="order-address"
+              name="address"
+              required
+              defaultValue={user?.address || ""}
+              placeholder="Calle, número, colonia, ciudad, CP"
+            />
           </div>
 
           <div>
@@ -83,18 +98,38 @@ export function OrderModal({ open, onOpenChange, draftId, defaultEmail }) {
               name="email"
               type="email"
               required
-              defaultValue={defaultEmail || ""}
-              placeholder="ana@correo.com"
+              defaultValue={user?.email || ""}
             />
           </div>
 
           <div>
-            <Label htmlFor="order-notes">Detalles (tamaño, color, uso)</Label>
+            <Label htmlFor="order-description">Descripción del pedido</Label>
+            <Textarea
+              id="order-description"
+              name="description"
+              rows={3}
+              placeholder="Tamaño, material, color y cualquier detalle de lo que quieres."
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="order-quantity">Cantidad</Label>
+            <Input
+              id="order-quantity"
+              name="quantity"
+              type="number"
+              min={1}
+              defaultValue={1}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="order-notes">Notas (opcional)</Label>
             <Textarea
               id="order-notes"
               name="notes"
-              rows={3}
-              placeholder="Quiero una figura de unos 10 cm, en color rosa, para regalo."
+              rows={2}
+              placeholder="Instrucciones adicionales"
             />
           </div>
 

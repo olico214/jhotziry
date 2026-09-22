@@ -2,17 +2,35 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import path from "node:path";
 import { db } from "@/lib/db/client";
-import { drafts, generationJobs, orders } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { drafts, generationJobs, orderEvents, orders } from "@/lib/db/schema";
+import { requireAdmin } from "@/lib/auth/guard";
 import { getProvider } from "@/lib/ai/provider";
 import { ensureRunner } from "@/lib/jobs/runner";
 import { readBuffer } from "@/lib/storage/files";
+import { bufferFromImageRecord } from "@/lib/storage/images";
 
-export async function POST(_request, ctx) {
-  const admin = await getCurrentUser();
-  if (!admin?.isAdmin) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+async function resolveImage(draft) {
+  const record = draft?.previewImage || draft?.sourceImage;
+  if (record) {
+    return {
+      buffer: bufferFromImageRecord(record),
+      extension:
+        (record.mime && String(record.mime).split("/")[1]) || "png",
+    };
   }
+
+  const imagePath = draft?.previewPath || draft?.sourceImagePath;
+  if (!imagePath) return null;
+
+  return {
+    buffer: await readBuffer(imagePath),
+    extension: path.extname(imagePath).slice(1) || "png",
+  };
+}
+
+export async function POST(request, ctx) {
+  const guard = await requireAdmin(request);
+  if (guard.error) return guard.error;
 
   const { id } = await ctx.params;
 
@@ -32,8 +50,8 @@ export async function POST(_request, ctx) {
     .where(eq(drafts.id, order.draftId))
     .limit(1);
 
-  const imagePath = draft?.previewPath || draft?.sourceImagePath;
-  if (!imagePath) {
+  const image = await resolveImage(draft);
+  if (!image) {
     return NextResponse.json(
       { error: "El diseño no tiene imagen para convertir" },
       { status: 400 },
@@ -47,31 +65,39 @@ export async function POST(_request, ctx) {
     .values({
       draftId: draft.id,
       type: "model",
-      status: "processing",
+      status: "queued",
       progress: 0,
       provider: provider.name,
     })
     .returning();
 
   try {
-    const imageBuffer = await readBuffer(imagePath);
-    const imageExtension = path.extname(imagePath).slice(1) || "png";
-
     const { stage, providerTaskId } = await provider.start({
       mode: "model",
-      imageBuffer,
-      imageExtension,
+      imageBuffer: image.buffer,
+      imageExtension: image.extension,
     });
 
     await db
       .update(generationJobs)
-      .set({ stage, providerJobId: providerTaskId, updatedAt: new Date() })
+      .set({
+        stage,
+        providerJobId: providerTaskId,
+        status: "processing",
+        updatedAt: new Date(),
+      })
       .where(eq(generationJobs.id, job.id));
 
     await db
       .update(orders)
       .set({ status: "generating", updatedAt: new Date() })
       .where(eq(orders.id, order.id));
+
+    await db.insert(orderEvents).values({
+      orderId: order.id,
+      status: "generating",
+      note: "Preparando el modelo 3D",
+    });
 
     return NextResponse.json({ ok: true, jobId: job.id });
   } catch (error) {
@@ -85,6 +111,16 @@ export async function POST(_request, ctx) {
       .set({ status: "failed", updatedAt: new Date() })
       .where(eq(orders.id, order.id));
 
-    return NextResponse.json({ error: error.message }, { status: 502 });
+    await db.insert(orderEvents).values({
+      orderId: order.id,
+      status: "failed",
+      note: error.message,
+    });
+
+    console.error("[admin:generate] error:", error.message);
+    return NextResponse.json(
+      { error: "No se pudo iniciar la generación del modelo." },
+      { status: 502 },
+    );
   }
 }

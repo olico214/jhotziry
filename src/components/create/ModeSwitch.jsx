@@ -10,7 +10,7 @@ const modes = [
 
 export function ModeSwitch({ mode, onChange }) {
   return (
-    <div className="inline-flex w-full rounded-full border border-blush-100 bg-white/70 p-1 sm:w-auto">
+    <div className="inline-flex w-full rounded-full border border-blush-100 glass p-1 sm:w-auto">
       {modes.map((item) => {
         const Icon = item.icon;
         const active = mode === item.id;

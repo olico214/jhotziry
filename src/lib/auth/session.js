@@ -23,13 +23,16 @@ export async function issueSession(userId) {
   const token = generateToken();
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000);
 
-  await db.insert(sessions).values({
-    userId,
-    tokenHash: hashToken(token),
-    expiresAt,
-  });
+  const [row] = await db
+    .insert(sessions)
+    .values({
+      userId,
+      tokenHash: hashToken(token),
+      expiresAt,
+    })
+    .returning({ id: sessions.id });
 
-  return { token, expiresAt };
+  return { token, expiresAt, sessionId: row.id };
 }
 
 export async function createSession(userId) {
@@ -39,15 +42,19 @@ export async function createSession(userId) {
   return token;
 }
 
-export async function getCurrentUser() {
+export async function getSession() {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
   const rows = await db
     .select({
-      id: users.id,
+      sessionId: sessions.id,
+      csrfHash: sessions.csrfHash,
+      userId: users.id,
       email: users.email,
+      fullName: users.fullName,
+      address: users.address,
       isAdmin: users.isAdmin,
       credits: users.credits,
       createdAt: users.createdAt,
@@ -63,6 +70,21 @@ export async function getCurrentUser() {
     .limit(1);
 
   return rows[0] ?? null;
+}
+
+export async function getCurrentUser() {
+  const session = await getSession();
+  if (!session) return null;
+
+  return {
+    id: session.userId,
+    email: session.email,
+    fullName: session.fullName,
+    address: session.address,
+    isAdmin: session.isAdmin,
+    credits: session.credits,
+    createdAt: session.createdAt,
+  };
 }
 
 export async function destroySession() {

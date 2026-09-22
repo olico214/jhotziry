@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api-client";
 
 export function useSession() {
   const queryClient = useQueryClient();
@@ -8,13 +9,13 @@ export function useSession() {
   const query = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
-      const response = await fetch("/api/auth/me");
+      const response = await apiFetch("/api/auth/me");
       return response.json();
     },
   });
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await apiFetch("/api/auth/logout", { method: "POST" });
     queryClient.setQueryData(["session"], { user: null });
   };
 

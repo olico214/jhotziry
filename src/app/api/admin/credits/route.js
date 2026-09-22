@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { creditTransactions, users } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/guard";
 
 const schema = z.object({
   userId: z.string().uuid(),
@@ -12,10 +12,8 @@ const schema = z.object({
 });
 
 export async function POST(request) {
-  const admin = await getCurrentUser();
-  if (!admin?.isAdmin) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-  }
+  const guard = await requireAdmin(request);
+  if (guard.error) return guard.error;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

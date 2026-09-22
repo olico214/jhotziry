@@ -1,12 +1,42 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { drafts, generationJobs, orders, users } from "@/lib/db/schema";
+import {
+  creditTransactions,
+  drafts,
+  generationJobs,
+  orderEvents,
+  orders,
+  users,
+} from "@/lib/db/schema";
 import { getProvider } from "@/lib/ai/provider";
 import { saveBuffer } from "@/lib/storage/files";
+import {
+  imageRecordFromBuffer,
+  mimeFromExtension,
+} from "@/lib/storage/images";
 import { sendImageReadyEmail } from "@/lib/auth/mail";
 import { APP_NAME } from "@/lib/config";
 
 const inFlight = (globalThis.__jhoInFlight ??= new Set());
+const MAX_ATTEMPTS = 5;
+const CREDITS_PER_PREVIEW = Number(process.env.CREDITS_PER_PREVIEW || 5);
+
+async function refundPreview(draft) {
+  if (!draft?.userId || CREDITS_PER_PREVIEW <= 0) return;
+
+  const [refunded] = await db
+    .update(users)
+    .set({ credits: sql`${users.credits} + ${CREDITS_PER_PREVIEW}` })
+    .where(eq(users.id, draft.userId))
+    .returning({ credits: users.credits });
+
+  await db.insert(creditTransactions).values({
+    userId: draft.userId,
+    amount: CREDITS_PER_PREVIEW,
+    balanceAfter: refunded?.credits ?? 0,
+    reason: "Reembolso por error de generación",
+  });
+}
 
 export async function advanceJob(jobId) {
   if (inFlight.has(jobId)) return null;
@@ -29,6 +59,24 @@ export async function advanceJob(jobId) {
 
     if (job.status !== "processing") return { job, draft };
 
+    if (!job.providerJobId) {
+      if (job.attempts + 1 >= MAX_ATTEMPTS) {
+        const [failed] = await db
+          .update(generationJobs)
+          .set({
+            status: "failed",
+            attempts: job.attempts + 1,
+            error: "El proveedor no devolvió un identificador de tarea",
+            updatedAt: new Date(),
+          })
+          .where(eq(generationJobs.id, job.id))
+          .returning();
+        await refundPreview(draft);
+        return { job: failed, draft };
+      }
+      return { job, draft };
+    }
+
     const provider = getProvider();
     const elapsedMs = Date.now() - new Date(job.createdAt).getTime();
 
@@ -41,7 +89,32 @@ export async function advanceJob(jobId) {
         elapsedMs,
       });
     } catch (error) {
-      step = { status: "failed", error: error.message, progress: job.progress };
+      const attempts = job.attempts + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        const [failed] = await db
+          .update(generationJobs)
+          .set({
+            status: "failed",
+            attempts,
+            error: error.message,
+            updatedAt: new Date(),
+          })
+          .where(eq(generationJobs.id, job.id))
+          .returning();
+        await db
+          .update(drafts)
+          .set({ status: "failed", updatedAt: new Date() })
+          .where(eq(drafts.id, draft.id));
+        await refundPreview(draft);
+        return { job: failed, draft };
+      }
+
+      const [retried] = await db
+        .update(generationJobs)
+        .set({ attempts, updatedAt: new Date() })
+        .where(eq(generationJobs.id, job.id))
+        .returning();
+      return { job: retried, draft };
     }
 
     const patch = {
@@ -65,9 +138,11 @@ export async function advanceJob(jobId) {
     const draftPatch = { updatedAt: new Date() };
 
     if (step.previewBuffer) {
-      const relative = `models/${draft.id}/preview.${step.previewExtension || "png"}`;
-      await saveBuffer(relative, step.previewBuffer);
-      draftPatch.previewPath = relative;
+      draftPatch.previewImage = imageRecordFromBuffer(
+        step.previewBuffer,
+        mimeFromExtension(step.previewExtension || "png"),
+      );
+      draftPatch.previewPath = null;
       draftPatch.status = "ready";
     }
 
@@ -75,18 +150,42 @@ export async function advanceJob(jobId) {
       const relative = `models/${draft.id}/model.${step.modelExtension || "glb"}`;
       await saveBuffer(relative, step.modelBuffer);
       draftPatch.modelPath = relative;
-      await db
+      const updatedOrders = await db
         .update(orders)
         .set({ modelPath: relative, status: "ready", updatedAt: new Date() })
-        .where(and(eq(orders.draftId, draft.id), eq(orders.status, "generating")));
+        .where(and(eq(orders.draftId, draft.id), eq(orders.status, "generating")))
+        .returning({ id: orders.id });
+
+      if (updatedOrders.length > 0) {
+        await db.insert(orderEvents).values(
+          updatedOrders.map((row) => ({
+            orderId: row.id,
+            status: "ready",
+            note: "Modelo 3D listo",
+          })),
+        );
+      }
     }
 
     if (step.status === "failed") {
       draftPatch.status = "failed";
-      await db
+      const failedOrders = await db
         .update(orders)
         .set({ status: "failed", updatedAt: new Date() })
-        .where(and(eq(orders.draftId, draft.id), eq(orders.status, "generating")));
+        .where(and(eq(orders.draftId, draft.id), eq(orders.status, "generating")))
+        .returning({ id: orders.id });
+
+      if (failedOrders.length > 0) {
+        await db.insert(orderEvents).values(
+          failedOrders.map((row) => ({
+            orderId: row.id,
+            status: "failed",
+            note: step.error || "No se pudo generar el modelo",
+          })),
+        );
+      }
+
+      await refundPreview(draft);
     }
 
     await db.update(drafts).set(draftPatch).where(eq(drafts.id, draft.id));
@@ -102,7 +201,7 @@ export async function advanceJob(jobId) {
         const base = process.env.APP_URL || "http://localhost:3000";
         await sendImageReadyEmail(
           owner.email,
-          `${base}/mis-disenos`,
+          `${base}/mis-pedidos`,
           APP_NAME,
         ).catch(() => {});
       }

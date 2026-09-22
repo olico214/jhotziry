@@ -33,7 +33,7 @@ export function PromptInput({ value, onChange, onGenerate, busy }) {
             key={example}
             type="button"
             onClick={() => onChange(example)}
-            className="rounded-full border border-blush-200 bg-white/70 px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-blush-300 hover:text-ink"
+            className="rounded-full border border-blush-200 glass px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-blush-300 hover:text-ink"
           >
             {example}
           </button>
@@ -50,7 +50,7 @@ export function PromptInput({ value, onChange, onGenerate, busy }) {
       </Button>
 
       {busy ? (
-        <p className="rounded-2xl bg-blush-50 px-4 py-3 text-xs text-ink-soft">
+        <p className="rounded-2xl glass-soft px-4 py-3 text-xs text-ink-soft">
           Puedes generar otra imagen mientras esperamos. Te avisaremos por correo
           en cuanto la primera esté lista.
         </p>
