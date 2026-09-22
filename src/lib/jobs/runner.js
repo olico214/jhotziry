@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   creditTransactions,
@@ -14,7 +14,8 @@ import {
   imageRecordFromBuffer,
   mimeFromExtension,
 } from "@/lib/storage/images";
-import { sendImageReadyEmail } from "@/lib/auth/mail";
+import { sendImageReadyEmail, sendModelReadyEmail } from "@/lib/auth/mail";
+import { notify } from "@/lib/notifications";
 import { APP_NAME } from "@/lib/config";
 
 const inFlight = (globalThis.__jhoInFlight ??= new Set());
@@ -146,24 +147,71 @@ export async function advanceJob(jobId) {
       draftPatch.status = "ready";
     }
 
+    const isParts = job.type === "model_parts";
+    const hadModel = Boolean(draft.modelPath || draft.modelPartsPath);
+
     if (step.modelBuffer) {
-      const relative = `models/${draft.id}/model.${step.modelExtension || "glb"}`;
+      const filename = isParts ? "model-parts.glb" : "model.glb";
+      const relative = `models/${draft.id}/${filename}`;
       await saveBuffer(relative, step.modelBuffer);
-      draftPatch.modelPath = relative;
+
+      if (isParts) {
+        draftPatch.modelPartsPath = relative;
+      } else {
+        draftPatch.modelPath = relative;
+      }
+
+      const orderPatch = {
+        status: "ready",
+        updatedAt: new Date(),
+        ...(isParts ? { modelPartsPath: relative } : { modelPath: relative }),
+      };
+
       const updatedOrders = await db
         .update(orders)
-        .set({ modelPath: relative, status: "ready", updatedAt: new Date() })
-        .where(and(eq(orders.draftId, draft.id), eq(orders.status, "generating")))
-        .returning({ id: orders.id });
+        .set(orderPatch)
+        .where(
+          and(
+            eq(orders.draftId, draft.id),
+            inArray(orders.status, ["generating", "ready", "failed"]),
+          ),
+        )
+        .returning({ id: orders.id, userId: orders.userId });
 
       if (updatedOrders.length > 0) {
         await db.insert(orderEvents).values(
           updatedOrders.map((row) => ({
             orderId: row.id,
             status: "ready",
-            note: "Modelo 3D listo",
+            note: isParts ? "Modelo por partes listo" : "Modelo 3D listo",
           })),
         );
+
+        if (!hadModel) {
+          const base = process.env.APP_URL || "http://localhost:3000";
+          for (const row of updatedOrders) {
+            const [owner] = await db
+              .select({ email: users.email })
+              .from(users)
+              .where(eq(users.id, row.userId))
+              .limit(1);
+
+            if (owner?.email) {
+              await sendModelReadyEmail(
+                owner.email,
+                `${base}/mis-pedidos/${row.id}`,
+                APP_NAME,
+              ).catch(() => {});
+            }
+
+            await notify(row.userId, {
+              type: "model_ready",
+              title: "Tu modelo 3D está listo",
+              body: "Ábrelo para verlo en 3D (solo vista, no descargable).",
+              link: `/mis-pedidos/${row.id}`,
+            }).catch(() => {});
+          }
+        }
       }
     }
 

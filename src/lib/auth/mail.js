@@ -176,6 +176,41 @@ export async function sendOrderConfirmationEmail(email, order, appName) {
   }
 }
 
+export async function sendModelReadyEmail(email, url, appName) {
+  const transport = getTransporter();
+
+  const html = `
+    <div style="font-family:Nunito,Arial,sans-serif;background:#fff5f9;padding:32px;border-radius:24px;color:#4a2b3b">
+      <h1 style="color:#e34d8b;margin:0 0 8px">${appName}</h1>
+      <p>¡Tu modelo 3D está listo! 🎉</p>
+      <p>Puedes verlo en 3D desde tu pedido (vista previa, no descargable).</p>
+      <p style="margin:24px 0">
+        <a href="${url}" style="background:#f96ba4;color:#fff;padding:12px 24px;border-radius:9999px;text-decoration:none;display:inline-block">
+          Ver mi modelo 3D
+        </a>
+      </p>
+    </div>
+  `;
+
+  if (!transport) {
+    console.info(`[modelo-listo] SMTP no configurado. Aviso para ${email}: ${url}`);
+    return { delivered: false };
+  }
+
+  try {
+    await transport.sendMail({
+      from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      to: email,
+      subject: `Tu modelo 3D está listo · ${appName}`,
+      html,
+    });
+    return { delivered: true };
+  } catch (error) {
+    console.error("[modelo-listo] Error al enviar aviso:", error.message);
+    return { delivered: false, error: error.message };
+  }
+}
+
 export async function sendImageReadyEmail(email, url, appName) {
   const transport = getTransporter();
 

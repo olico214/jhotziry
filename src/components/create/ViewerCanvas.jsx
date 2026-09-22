@@ -1,9 +1,14 @@
 "use client";
 
-import { Component, Suspense, useMemo } from "react";
+import { Component, Suspense, useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { Canvas } from "@react-three/fiber";
-import { Center, ContactShadows, OrbitControls, useGLTF } from "@react-three/drei";
+import { Canvas, useThree } from "@react-three/fiber";
+import {
+  Center,
+  ContactShadows,
+  OrbitControls,
+  useGLTF,
+} from "@react-three/drei";
 
 function applyMaterial(mesh, materialMode) {
   if (materialMode === "wireframe") {
@@ -28,19 +33,58 @@ function applyMaterial(mesh, materialMode) {
   }
 }
 
-function Model({ url, materialMode }) {
+function CameraRig({ distance }) {
+  const { camera, controls } = useThree();
+
+  useEffect(() => {
+    const direction = camera.position.clone().normalize();
+    if (direction.lengthSq() === 0) direction.set(0, 0.3, 1);
+    camera.position.copy(direction.multiplyScalar(distance));
+    if (controls?.update) controls.update();
+  }, [distance, camera, controls]);
+
+  return null;
+}
+
+function Model({ url, materialMode, hiddenParts, explode, onParts }) {
   const { scene } = useGLTF(url);
+
+  const parts = useMemo(() => {
+    const list = [];
+    scene.traverse((object) => {
+      if (object.isMesh) list.push(object.name || `Parte ${list.length + 1}`);
+    });
+    return list;
+  }, [scene]);
+
+  useEffect(() => {
+    onParts?.(parts);
+  }, [parts, onParts]);
 
   const cloned = useMemo(() => {
     const clone = scene.clone(true);
+    const box = new THREE.Box3().setFromObject(clone);
+    const center = box.getCenter(new THREE.Vector3());
+    let index = 0;
+
     clone.traverse((object) => {
-      if (object.isMesh) {
-        object.castShadow = true;
-        applyMaterial(object, materialMode);
+      if (!object.isMesh) return;
+      const name = object.name || `Parte ${index + 1}`;
+      index += 1;
+
+      object.castShadow = true;
+      applyMaterial(object, materialMode);
+      object.visible = !hiddenParts.includes(name);
+
+      if (explode > 0) {
+        const direction = new THREE.Vector3().subVectors(object.position, center);
+        if (direction.lengthSq() === 0) direction.set(0, 1, 0);
+        object.position.addScaledVector(direction.normalize(), explode);
       }
     });
+
     return clone;
-  }, [scene, materialMode]);
+  }, [scene, materialMode, hiddenParts, explode]);
 
   return <primitive object={cloned} />;
 }
@@ -79,6 +123,10 @@ export default function ViewerCanvas({
   modelUrl,
   materialMode = "textured",
   autoRotate = true,
+  distance = 4.2,
+  hiddenParts = [],
+  explode = 0,
+  onParts,
 }) {
   return (
     <Canvas camera={{ position: [0, 0.6, 4.2], fov: 45 }} dpr={[1, 2]}>
@@ -90,11 +138,18 @@ export default function ViewerCanvas({
         intensity={0.45}
         color="#ffb8d4"
       />
+      <CameraRig distance={distance} />
       <ModelBoundary>
         <Suspense fallback={<Placeholder />}>
           {modelUrl ? (
             <Center>
-              <Model url={modelUrl} materialMode={materialMode} />
+              <Model
+                url={modelUrl}
+                materialMode={materialMode}
+                hiddenParts={hiddenParts}
+                explode={explode}
+                onParts={onParts}
+              />
             </Center>
           ) : (
             <Placeholder />
@@ -110,9 +165,10 @@ export default function ViewerCanvas({
         color="#c13a72"
       />
       <OrbitControls
+        makeDefault
         enablePan={false}
-        minDistance={2.5}
-        maxDistance={7}
+        minDistance={2}
+        maxDistance={9}
         autoRotate={autoRotate}
         autoRotateSpeed={1.2}
       />

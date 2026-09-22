@@ -21,6 +21,10 @@ function serialize(job, draft, isAdmin) {
       isAdmin && job.status === "succeeded" && draft?.modelPath
         ? `/api/files/${draft.id}?v=${version}`
         : null,
+    modelPartsUrl:
+      isAdmin && job.status === "succeeded" && draft?.modelPartsPath
+        ? `/api/files/${draft.id}?kind=parts&v=${version}`
+        : null,
     summary: draft?.aiSummary ?? null,
     error: job.error,
   };

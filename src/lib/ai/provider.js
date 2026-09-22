@@ -4,11 +4,14 @@ import * as tripo from "./tripo";
 const MOCK_ESTIMATED_MS = 6000;
 
 const CARICATURE_PROMPT =
-  "Transform this photo into a cute 3D cartoon caricature of the same subject. " +
-  "Keep the subject recognizable: same identity, hairstyle, clothing and colors, " +
-  "but exaggerate the proportions in a fun way (slightly bigger head, expressive eyes, " +
-  "friendly smile). Smooth pastel colors, soft studio lighting, clean simple background, " +
-  "stylized collectible figurine look ready to be turned into a 3D printable model. " +
+  "Transform this photo into a cute 3D cartoon caricature of the same subject, " +
+  "keeping the subject recognizable (same identity, hairstyle, clothing and colors). " +
+  "Exaggerate the proportions in a fun way (slightly bigger head, expressive eyes, friendly smile). " +
+  "IMPORTANT for FDM printing with filaments: use a simple, flat palette of 2 to 4 solid basic colors " +
+  "with high contrast, avoid gradients, realistic shading, transparencies and fine details. " +
+  "Prefer clean closed shapes and a clear silhouette on a plain background, " +
+  "and keep color regions clearly separated so the model can be printed in parts with different filaments. " +
+  "Stylized collectible figurine look with a flat base, ready to become a 3D printable model. " +
   "Do not change who the subject is.";
 
 function tripoEnabled() {
@@ -19,7 +22,7 @@ function tripoEnabled() {
 const tripoProvider = {
   name: "tripo",
 
-  async start({ mode, prompt, imageBuffer, imageExtension }) {
+  async start({ mode, prompt, imageBuffer, imageExtension, parts }) {
     if (mode === "text") {
       const taskId = await tripo.createTextToImage({ prompt });
       return { stage: "image_gen", providerTaskId: taskId };
@@ -44,6 +47,7 @@ const tripoProvider = {
     const taskId = await tripo.createImageToModel({
       fileToken,
       extension: imageExtension,
+      parts,
     });
     return { stage: "model_gen", providerTaskId: taskId };
   },

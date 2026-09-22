@@ -95,6 +95,7 @@ export const drafts = pgTable(
     sourceImage: jsonb("source_image"),
     previewImage: jsonb("preview_image"),
     modelPath: text("model_path"),
+    modelPartsPath: text("model_parts_path"),
     status: text("status").notNull().default("empty"),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
@@ -152,6 +153,7 @@ export const orders = pgTable(
     notes: text("notes"),
     status: text("status").notNull().default("new"),
     modelPath: text("model_path"),
+    modelPartsPath: text("model_parts_path"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

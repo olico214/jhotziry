@@ -7,7 +7,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { Button } from "@/components/ui/Button";
 import { OrderChat } from "@/components/orders/OrderChat";
 import { AdminOrderActions } from "@/components/admin/AdminOrderActions";
-import { AdminModelViewer } from "@/components/admin/AdminModelViewer";
+import { Model3DViewer } from "@/components/orders/Model3DViewer";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -80,17 +80,23 @@ export default async function OrderDetailPage({ params }) {
             draftId={order.draftId}
             status={order.status}
             hasModel={Boolean(order.modelPath)}
+            hasParts={Boolean(order.modelPartsPath)}
           />
         </div>
       ) : null}
 
-      {user.isAdmin && order.modelPath ? (
+      {order.modelPath || order.modelPartsPath ? (
         <section className="mt-8">
           <h2 className="mb-4 text-lg font-bold text-ink">Modelo 3D</h2>
-          <AdminModelViewer
+          <Model3DViewer
             draftId={order.draftId}
             version={new Date(order.updatedAt).getTime()}
+            hasModel={Boolean(order.modelPath)}
+            hasParts={Boolean(order.modelPartsPath)}
           />
+          <p className="mt-2 text-xs text-ink-soft">
+            Vista previa en 3D. La descarga del modelo la gestiona el equipo.
+          </p>
         </section>
       ) : null}
 

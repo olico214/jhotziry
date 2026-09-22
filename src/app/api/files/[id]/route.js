@@ -4,12 +4,13 @@ import { drafts } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
 import { readBuffer } from "@/lib/storage/files";
 
-export async function GET(_request, ctx) {
+export async function GET(request, ctx) {
   const { id } = await ctx.params;
+  const kind = new URL(request.url).searchParams.get("kind");
 
   const user = await getCurrentUser();
-  if (!user?.isAdmin) {
-    return new Response("No autorizado", { status: 403 });
+  if (!user) {
+    return new Response("No autorizado", { status: 401 });
   }
 
   const [draft] = await db
@@ -18,18 +19,23 @@ export async function GET(_request, ctx) {
     .where(eq(drafts.id, id))
     .limit(1);
 
-  if (!draft?.modelPath) {
+  const filePath = kind === "parts" ? draft?.modelPartsPath : draft?.modelPath;
+
+  if (!filePath) {
     return new Response("Modelo no encontrado", { status: 404 });
   }
 
+  if (!user.isAdmin && draft.userId !== user.id) {
+    return new Response("No autorizado", { status: 403 });
+  }
+
   try {
-    const buffer = await readBuffer(draft.modelPath);
+    const buffer = await readBuffer(filePath);
     return new Response(buffer, {
       headers: {
         "Content-Type": "model/gltf-binary",
         "Content-Length": String(buffer.length),
-        "Content-Disposition": `attachment; filename="modelo-${draft.id}.glb"`,
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, no-store",
       },
     });
   } catch {

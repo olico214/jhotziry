@@ -12,3 +12,11 @@ export const CREDITS_PER_IMAGE = Number(
 export const CREDITS_PER_IDEA = Number(
   process.env.NEXT_PUBLIC_CREDITS_PER_IDEA || 1,
 );
+
+export const TRIPO_COST_MODEL = Number(
+  process.env.NEXT_PUBLIC_TRIPO_COST_MODEL || 30,
+);
+
+export const TRIPO_COST_PARTS = Number(
+  process.env.NEXT_PUBLIC_TRIPO_COST_PARTS || 40,
+);

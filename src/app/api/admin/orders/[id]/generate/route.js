@@ -9,6 +9,15 @@ import { ensureRunner } from "@/lib/jobs/runner";
 import { readBuffer } from "@/lib/storage/files";
 import { bufferFromImageRecord } from "@/lib/storage/images";
 
+const PLANS = {
+  textured: [{ type: "model", parts: false, label: "texturizado" }],
+  parts: [{ type: "model_parts", parts: true, label: "por partes" }],
+  both: [
+    { type: "model", parts: false, label: "texturizado" },
+    { type: "model_parts", parts: true, label: "por partes" },
+  ],
+};
+
 async function resolveImage(draft) {
   const record = draft?.previewImage || draft?.sourceImage;
   if (record) {
@@ -31,6 +40,14 @@ async function resolveImage(draft) {
 export async function POST(request, ctx) {
   const guard = await requireAdmin(request);
   if (guard.error) return guard.error;
+
+  const payload = await request.json().catch(() => ({}));
+  const mode = ["textured", "parts", "both"].includes(payload?.mode)
+    ? payload.mode
+    : payload?.parts
+      ? "parts"
+      : "textured";
+  const plan = PLANS[mode];
 
   const { id } = await ctx.params;
 
@@ -60,52 +77,53 @@ export async function POST(request, ctx) {
 
   const provider = getProvider();
   ensureRunner();
-  const [job] = await db
-    .insert(generationJobs)
-    .values({
-      draftId: draft.id,
-      type: "model",
-      status: "queued",
-      progress: 0,
-      provider: provider.name,
-    })
-    .returning();
 
-  try {
-    const { stage, providerTaskId } = await provider.start({
-      mode: "model",
-      imageBuffer: image.buffer,
-      imageExtension: image.extension,
-    });
+  const started = [];
+  const failed = [];
 
-    await db
-      .update(generationJobs)
-      .set({
-        stage,
-        providerJobId: providerTaskId,
-        status: "processing",
-        updatedAt: new Date(),
+  for (const item of plan) {
+    const [job] = await db
+      .insert(generationJobs)
+      .values({
+        draftId: draft.id,
+        type: item.type,
+        status: "queued",
+        progress: 0,
+        provider: provider.name,
       })
-      .where(eq(generationJobs.id, job.id));
+      .returning();
 
-    await db
-      .update(orders)
-      .set({ status: "generating", updatedAt: new Date() })
-      .where(eq(orders.id, order.id));
+    try {
+      const { stage, providerTaskId } = await provider.start({
+        mode: "model",
+        imageBuffer: image.buffer,
+        imageExtension: image.extension,
+        parts: item.parts,
+      });
 
-    await db.insert(orderEvents).values({
-      orderId: order.id,
-      status: "generating",
-      note: "Preparando el modelo 3D",
-    });
+      await db
+        .update(generationJobs)
+        .set({
+          stage,
+          providerJobId: providerTaskId,
+          status: "processing",
+          updatedAt: new Date(),
+        })
+        .where(eq(generationJobs.id, job.id));
 
-    return NextResponse.json({ ok: true, jobId: job.id });
-  } catch (error) {
-    await db
-      .update(generationJobs)
-      .set({ status: "failed", error: error.message, updatedAt: new Date() })
-      .where(eq(generationJobs.id, job.id));
+      started.push(job.id);
+    } catch (error) {
+      await db
+        .update(generationJobs)
+        .set({ status: "failed", error: error.message, updatedAt: new Date() })
+        .where(eq(generationJobs.id, job.id));
 
+      failed.push(item.label);
+      console.error("[admin:generate] error:", error.message);
+    }
+  }
+
+  if (started.length === 0) {
     await db
       .update(orders)
       .set({ status: "failed", updatedAt: new Date() })
@@ -114,13 +132,28 @@ export async function POST(request, ctx) {
     await db.insert(orderEvents).values({
       orderId: order.id,
       status: "failed",
-      note: error.message,
+      note: "No se pudo iniciar la generación del modelo.",
     });
 
-    console.error("[admin:generate] error:", error.message);
     return NextResponse.json(
       { error: "No se pudo iniciar la generación del modelo." },
       { status: 502 },
     );
   }
+
+  await db
+    .update(orders)
+    .set({ status: "generating", updatedAt: new Date() })
+    .where(eq(orders.id, order.id));
+
+  await db.insert(orderEvents).values({
+    orderId: order.id,
+    status: "generating",
+    note:
+      plan.length > 1
+        ? "Generando modelos 3D (texturizado y por partes)"
+        : `Generando modelo ${plan[0].label}`,
+  });
+
+  return NextResponse.json({ ok: true, jobIds: started, failed });
 }

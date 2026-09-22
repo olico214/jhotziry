@@ -73,17 +73,27 @@ export async function uploadImage({ buffer, extension }) {
   return data.file_token;
 }
 
-export async function createImageToModel({ fileToken, extension }) {
+export async function createImageToModel({ fileToken, extension, parts = false }) {
   const type = normalizeImageType(extension);
+
+  const body = {
+    file: { type, file_token: fileToken },
+    model: process.env.TRIPO_MODEL || "v3.1-20260211",
+    face_limit: Number(process.env.TRIPO_FACE_LIMIT || 80000),
+  };
+
+  if (parts) {
+    body.generate_parts = true;
+    body.texture = false;
+    body.pbr = false;
+  } else {
+    body.texture = process.env.TRIPO_TEXTURE !== "false";
+    body.pbr = process.env.TRIPO_PBR !== "false";
+  }
+
   const data = await tripoFetch("/generation/image-to-model", {
     method: "POST",
-    body: JSON.stringify({
-      file: { type, file_token: fileToken },
-      model: process.env.TRIPO_MODEL || "v3.1-20260211",
-      texture: process.env.TRIPO_TEXTURE !== "false",
-      pbr: process.env.TRIPO_PBR !== "false",
-      face_limit: Number(process.env.TRIPO_FACE_LIMIT || 80000),
-    }),
+    body: JSON.stringify(body),
   });
   return data.task_id;
 }
