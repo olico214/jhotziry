@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { Button } from "@/components/ui/Button";
 import { OrderChat } from "@/components/orders/OrderChat";
 import { AdminOrderActions } from "@/components/admin/AdminOrderActions";
+import { AdminModelViewer } from "@/components/admin/AdminModelViewer";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -81,6 +82,16 @@ export default async function OrderDetailPage({ params }) {
             hasModel={Boolean(order.modelPath)}
           />
         </div>
+      ) : null}
+
+      {user.isAdmin && order.modelPath ? (
+        <section className="mt-8">
+          <h2 className="mb-4 text-lg font-bold text-ink">Modelo 3D</h2>
+          <AdminModelViewer
+            draftId={order.draftId}
+            version={new Date(order.updatedAt).getTime()}
+          />
+        </section>
       ) : null}
 
       <div className="mt-4 grid gap-6 sm:grid-cols-[240px_1fr]">

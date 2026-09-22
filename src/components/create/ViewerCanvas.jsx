@@ -1,12 +1,48 @@
 "use client";
 
-import { Component, Suspense } from "react";
+import { Component, Suspense, useMemo } from "react";
+import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
-import { ContactShadows, OrbitControls, useGLTF } from "@react-three/drei";
+import { Center, ContactShadows, OrbitControls, useGLTF } from "@react-three/drei";
 
-function Model({ url }) {
+function applyMaterial(mesh, materialMode) {
+  if (materialMode === "wireframe") {
+    mesh.material = new THREE.MeshBasicMaterial({
+      color: "#c13a72",
+      wireframe: true,
+    });
+  } else if (materialMode === "clay") {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: "#d8c7d0",
+      roughness: 0.9,
+      metalness: 0,
+    });
+  } else if (materialMode === "resin") {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: "#ffd5e6",
+      roughness: 0.3,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.85,
+    });
+  }
+}
+
+function Model({ url, materialMode }) {
   const { scene } = useGLTF(url);
-  return <primitive object={scene} />;
+
+  const cloned = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((object) => {
+      if (object.isMesh) {
+        object.castShadow = true;
+        applyMaterial(object, materialMode);
+      }
+    });
+    return clone;
+  }, [scene, materialMode]);
+
+  return <primitive object={cloned} />;
 }
 
 function Placeholder() {
@@ -39,7 +75,11 @@ class ModelBoundary extends Component {
   }
 }
 
-export default function ViewerCanvas({ modelUrl }) {
+export default function ViewerCanvas({
+  modelUrl,
+  materialMode = "textured",
+  autoRotate = true,
+}) {
   return (
     <Canvas camera={{ position: [0, 0.6, 4.2], fov: 45 }} dpr={[1, 2]}>
       <color attach="background" args={["#fff5f9"]} />
@@ -52,7 +92,13 @@ export default function ViewerCanvas({ modelUrl }) {
       />
       <ModelBoundary>
         <Suspense fallback={<Placeholder />}>
-          {modelUrl ? <Model url={modelUrl} /> : <Placeholder />}
+          {modelUrl ? (
+            <Center>
+              <Model url={modelUrl} materialMode={materialMode} />
+            </Center>
+          ) : (
+            <Placeholder />
+          )}
         </Suspense>
       </ModelBoundary>
       <ContactShadows
@@ -67,7 +113,7 @@ export default function ViewerCanvas({ modelUrl }) {
         enablePan={false}
         minDistance={2.5}
         maxDistance={7}
-        autoRotate
+        autoRotate={autoRotate}
         autoRotateSpeed={1.2}
       />
     </Canvas>
