@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/guard";
 import { limitByKey } from "@/lib/security/rate-limit";
+import { hasActiveJob } from "@/lib/jobs/active";
 import { resolveUserDraft } from "@/lib/db/drafts";
 import { getProvider } from "@/lib/ai/provider";
 import { enhanceTextPrompt, isEnhanceEnabled } from "@/lib/ai/deepseek";
@@ -45,6 +46,13 @@ export async function POST(request) {
 
   const limited = limitByKey("generate:text", user.id, 10, 60 * 60 * 1000);
   if (limited) return limited;
+
+  if (await hasActiveJob(user.id)) {
+    return NextResponse.json(
+      { error: "Ya tienes una generación en curso. Espera a que termine." },
+      { status: 409 },
+    );
+  }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

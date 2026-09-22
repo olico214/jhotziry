@@ -35,7 +35,7 @@ export async function GET(_request, ctx) {
       headers: {
         "Content-Type": draft.previewImage.mime || "image/png",
         "Content-Length": String(buffer.length),
-        "Cache-Control": "private, max-age=300",
+        "Cache-Control": "no-store",
       },
     });
   }
@@ -46,7 +46,7 @@ export async function GET(_request, ctx) {
       headers: {
         "Content-Type": contentTypeFor(draft.previewPath),
         "Content-Length": String(buffer.length),
-        "Cache-Control": "private, max-age=300",
+        "Cache-Control": "no-store",
       },
     });
   } catch {

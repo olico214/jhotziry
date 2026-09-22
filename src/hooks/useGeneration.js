@@ -58,15 +58,12 @@ export function useGeneration() {
   }, [query.error]);
 
   const startText = async (prompt) => {
-    const draftId = useDraftStore.getState().draftId;
     const style = useDraftStore.getState().style;
-    const body = { prompt, style };
-    if (draftId) body.draftId = draftId;
 
     const response = await apiFetch("/api/generate/text", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ prompt, style }),
     });
     const data = await response.json().catch(() => ({}));
 
@@ -87,9 +84,7 @@ export function useGeneration() {
   };
 
   const startImage = async (file, prompt) => {
-    const draftId = useDraftStore.getState().draftId;
     const form = new FormData();
-    if (draftId) form.set("draftId", draftId);
     form.set("image", file);
     if (prompt) form.set("prompt", prompt);
 

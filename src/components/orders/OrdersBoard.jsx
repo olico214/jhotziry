@@ -181,6 +181,8 @@ export function OrdersBoard({ orders }) {
                   <img
                     src={order.previewUrl}
                     alt={order.description || "Producto"}
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-contain"
                   />
                 ) : (

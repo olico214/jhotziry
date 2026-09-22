@@ -203,6 +203,8 @@ export function Landing({ accessNotice, featured = [] }) {
                       <img
                         src={`/api/posts/${post.id}/image`}
                         alt={post.title || "Destacado"}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                       />
                     ) : null}

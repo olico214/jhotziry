@@ -24,7 +24,15 @@ export async function ensureDraft(id) {
 export async function resolveUserDraft(userId, draftId) {
   if (draftId) {
     const draft = await getDraft(draftId);
-    if (draft && (draft.userId === null || draft.userId === userId)) {
+    const used =
+      draft &&
+      (draft.previewImage ||
+        draft.previewPath ||
+        draft.sourceImage ||
+        draft.sourceImagePath ||
+        draft.modelPath);
+
+    if (!used && draft && (draft.userId === null || draft.userId === userId)) {
       if (draft.userId === null) {
         await db
           .update(drafts)

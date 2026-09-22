@@ -34,6 +34,7 @@ export function CreateWorkspace() {
   const [authOpen, setAuthOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const [magicOpen, setMagicOpen] = useState(false);
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     useDraftStore.persist.rehydrate();
@@ -47,21 +48,32 @@ export function CreateWorkspace() {
   }, []);
 
   const generating = status === "generating";
+  const busy = generating || pending;
   const ready = status === "ready" && Boolean(previewUrl);
 
   const handleMode = (next) => {
-    if (generating) return;
+    if (busy) return;
     setMode(next);
   };
 
   const handleText = async (value) => {
-    const result = await startText(value);
-    if (result?.authRequired) setAuthOpen(true);
+    setPending(true);
+    try {
+      const result = await startText(value);
+      if (result?.authRequired) setAuthOpen(true);
+    } finally {
+      setPending(false);
+    }
   };
 
   const handleImage = async (file, imagePrompt) => {
-    const result = await startImage(file, imagePrompt);
-    if (result?.authRequired) setAuthOpen(true);
+    setPending(true);
+    try {
+      const result = await startImage(file, imagePrompt);
+      if (result?.authRequired) setAuthOpen(true);
+    } finally {
+      setPending(false);
+    }
   };
 
   const handleMagicExpand = async (idea) => {
@@ -129,7 +141,7 @@ export function CreateWorkspace() {
           <StyleSelector
             value={style}
             onChange={setStyle}
-            disabled={generating}
+            disabled={busy}
             allowed={["cartoon"]}
           />
 
@@ -138,10 +150,10 @@ export function CreateWorkspace() {
               value={prompt}
               onChange={setPrompt}
               onGenerate={handleText}
-              busy={generating}
+              busy={busy}
             />
           ) : (
-            <ImageDropzone onGenerate={handleImage} busy={generating} />
+            <ImageDropzone onGenerate={handleImage} busy={busy} />
           )}
 
           <p className="rounded-2xl glass-soft px-4 py-2 text-xs text-ink-soft">

@@ -269,6 +269,8 @@ export function BlogFeed({ posts, viewer }) {
                 <img
                   src={`/api/posts/${post.id}/image`}
                   alt={post.title || "Publicación"}
+                  loading="lazy"
+                  decoding="async"
                   className="max-h-[440px] w-full glass-soft object-cover"
                 />
               ) : null}

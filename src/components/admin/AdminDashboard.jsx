@@ -241,6 +241,8 @@ export function AdminDashboard({
                         <img
                           src={`/api/preview/${draft.id}`}
                           alt={order.description || "Producto"}
+                          loading="lazy"
+                          decoding="async"
                           className="h-full w-full object-contain"
                         />
                       ) : (
@@ -373,6 +375,8 @@ export function AdminDashboard({
                       <img
                         src={`/api/posts/${post.id}/image`}
                         alt={post.title || "Publicación"}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                       />
                     ) : (

@@ -36,6 +36,7 @@ export function ImageDropzone({ onGenerate, busy }) {
     accept: { "image/*": [] },
     maxFiles: 1,
     multiple: false,
+    disabled: busy,
   });
 
   return (
@@ -83,6 +84,7 @@ export function ImageDropzone({ onGenerate, busy }) {
           onChange={(event) => setPrompt(event.target.value)}
           rows={3}
           maxLength={500}
+          disabled={busy}
           placeholder="Cuéntanos cambios: “de astronauta”, “con sombrero y globos”, “estilo acuarela”…"
         />
         <div className="mt-2 flex flex-wrap gap-2">
@@ -107,7 +109,7 @@ export function ImageDropzone({ onGenerate, busy }) {
         type="button"
         size="lg"
         className="w-full"
-        disabled={!file}
+        disabled={!file || busy}
         onClick={() => file && onGenerate(file, prompt.trim())}
       >
         {busy ? (
@@ -115,13 +117,12 @@ export function ImageDropzone({ onGenerate, busy }) {
         ) : (
           <Sparkles className="h-4 w-4" />
         )}
-        Convertir a caricatura
+        {busy ? "Generando…" : "Convertir a caricatura"}
       </Button>
 
       {busy ? (
         <p className="rounded-2xl glass-soft px-4 py-3 text-xs text-ink-soft">
-          Puedes seguir creando mientras esperamos. Te avisaremos por correo
-          cuando tu vista previa esté lista.
+          Estamos creando tu imagen. Te avisaremos por correo cuando esté lista.
         </p>
       ) : null}
     </div>

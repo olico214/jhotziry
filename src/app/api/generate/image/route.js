@@ -6,6 +6,7 @@ import { creditTransactions, drafts, generationJobs, users } from "@/lib/db/sche
 import { resolveUserDraft } from "@/lib/db/drafts";
 import { requireUser } from "@/lib/auth/guard";
 import { limitByKey } from "@/lib/security/rate-limit";
+import { hasActiveJob } from "@/lib/jobs/active";
 import { getProvider } from "@/lib/ai/provider";
 import { describeImagePrompt, enhanceImagePrompt, isEnhanceEnabled } from "@/lib/ai/deepseek";
 import { ensureRunner } from "@/lib/jobs/runner";
@@ -27,6 +28,13 @@ export async function POST(request) {
 
   const limited = limitByKey("generate:image", user.id, 10, 60 * 60 * 1000);
   if (limited) return limited;
+
+  if (await hasActiveJob(user.id)) {
+    return NextResponse.json(
+      { error: "Ya tienes una generación en curso. Espera a que termine." },
+      { status: 409 },
+    );
+  }
 
   const form = await request.formData().catch(() => null);
   if (!form) {

@@ -90,6 +90,8 @@ export default async function OrderDetailPage({ params }) {
             <img
               src={previewUrl}
               alt={order.description || "Producto"}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-contain"
             />
           ) : null}

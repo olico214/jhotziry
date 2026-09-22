@@ -40,19 +40,18 @@ export function PromptInput({ value, onChange, onGenerate, busy }) {
         ))}
       </div>
 
-      <Button type="submit" size="lg" className="w-full">
+      <Button type="submit" size="lg" className="w-full" disabled={busy}>
         {busy ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <Sparkles className="h-4 w-4" />
         )}
-        {busy ? "Generar otra imagen" : "Generar vista previa"}
+        {busy ? "Generando…" : "Generar vista previa"}
       </Button>
 
       {busy ? (
         <p className="rounded-2xl glass-soft px-4 py-3 text-xs text-ink-soft">
-          Puedes generar otra imagen mientras esperamos. Te avisaremos por correo
-          en cuanto la primera esté lista.
+          Estamos creando tu imagen. Te avisaremos por correo cuando esté lista.
         </p>
       ) : null}
     </form>

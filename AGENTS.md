@@ -36,6 +36,16 @@ npm run admin:grant -- correo@dominio.com   # marca admin a un usuario existente
 ```
 Antes de tocar APIs/convenciones de Next 16, leer `node_modules/next/dist/docs/` (ver bloque de arriba). Recordar: `cookies()`, `headers()`, `params`, `searchParams` son **async** en Next 16.
 
+## Base de datos (instalación y actualización)
+Migraciones versionadas en `src/lib/db/migrations/`; drizzle-kit usa `drizzle.config.mjs` (carga `.env.local` con dotenv).
+
+- **Instalación inicial** (crear tablas): `npm run db:migrate`. No hace falta `db:generate` en el servidor.
+- **Desarrollo, al cambiar `schema.js`**: `npm run db:generate` → revisar el SQL generado → `npm run db:migrate` → commitear el nuevo archivo de `migrations/` junto al cambio de `schema.js`.
+- **Producción, al actualizar código**: `git pull` → `npm ci` → `npm run db:migrate` → `npm run build` → reiniciar (`npm run start` o systemd/pm2).
+- **Nunca** `db:push` en producción (solo prototipos locales, no lleva historial).
+- **Estado**: tabla `drizzle.__drizzle_migrations`.
+- **Respaldo antes de migrar**: `pg_dump "$DATABASE_URL" -Fc -f backup.dump` (Drizzle no hace rollback automático).
+
 ## Variables de entorno
 Copiar `.env.example` a `.env.local` (gitignored). Claves:
 - `NEXT_PUBLIC_APP_NAME` (por defecto `jhotziry`), `APP_URL` (URL pública, usada en enlaces de correo).
@@ -78,6 +88,9 @@ src/lib/
 - **Foto → caricatura**: `POST /api/generate/image` (multipart `image` + `prompt` opcional) → DeepSeek traduce/mejora el prompt y describe la foto → Tripo `image-to-image` (base caricatura + extra del usuario) → `preview_image`.
 - **Imagen → 3D**: solo admin, `POST /api/admin/orders/[id]/generate` → Tripo `image-to-model` → `drafts.model_path` (`.glb` en disco) → descarga vía `GET /api/files/[id]` (solo admin).
 - **Trabajos**: `src/lib/jobs/runner.js` (`ensureRunner`) avanza los `generation_jobs` en `processing` cada 5 s, sin depender del navegador. Al terminar envía correo y notificación.
+- **Un borrador por generación**: el cliente **no reutiliza** `draftId`; cada generación crea un `draft` nuevo (así cada pedido conserva su propia imagen). `resolveUserDraft` además crea uno nuevo si el draft recibido ya tiene imagen/modelo. `/api/preview/[id]` responde `Cache-Control: no-store`.
+- **Una generación por usuario**: el cliente bloquea el botón al instante (`pending`); el servidor devuelve **409** (`src/lib/jobs/active.js` → `hasActiveJob`) si el usuario ya tiene un job `queued`/`processing`. No aplica a la generación de modelo 3D del admin.
+- **Imágenes**: todos los `<img>` de contenido usan `loading="lazy"` y `decoding="async"`.
 - **Pedido**: el usuario pide su pieza → `orders` + `order_events` (timeline) + email a admin y cliente + notificación al admin. Chat por pedido con `order_messages`. El **panel admin reutiliza `OrdersBoard`** (la misma lista que "Mis pedidos") en la pestaña Pedidos; al hacer clic en un pedido se abre `/mis-pedidos/[id]`, que muestra imagen, datos, timeline y chat. Si el que mira es admin, ahí mismo aparecen las **acciones de admin** (Generar 3D / cambiar estado) vía `AdminOrderActions`.
 
 ### Rutas API (todas en `src/app/api`)
