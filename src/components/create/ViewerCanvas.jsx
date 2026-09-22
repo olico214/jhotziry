@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, Suspense, useEffect, useMemo } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { Canvas, useThree } from "@react-three/fiber";
 import {
@@ -10,13 +10,25 @@ import {
   useGLTF,
 } from "@react-three/drei";
 
-function applyMaterial(mesh, materialMode) {
+function applyMaterial(mesh, materialMode, paintedColor) {
   if (materialMode === "wireframe") {
     mesh.material = new THREE.MeshBasicMaterial({
       color: "#c13a72",
       wireframe: true,
     });
-  } else if (materialMode === "clay") {
+    return;
+  }
+
+  if (paintedColor) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: paintedColor,
+      roughness: 0.65,
+      metalness: 0.05,
+    });
+    return;
+  }
+
+  if (materialMode === "clay") {
     mesh.material = new THREE.MeshStandardMaterial({
       color: "#d8c7d0",
       roughness: 0.9,
@@ -46,7 +58,7 @@ function CameraRig({ distance }) {
   return null;
 }
 
-function Model({ url, materialMode, hiddenParts, explode, onParts }) {
+function Model({ url, materialMode, hiddenParts, explode, partColors, onParts, modelRef }) {
   const { scene } = useGLTF(url);
 
   const parts = useMemo(() => {
@@ -73,7 +85,7 @@ function Model({ url, materialMode, hiddenParts, explode, onParts }) {
       index += 1;
 
       object.castShadow = true;
-      applyMaterial(object, materialMode);
+      applyMaterial(object, materialMode, partColors?.[name]);
       object.visible = !hiddenParts.includes(name);
 
       if (explode > 0) {
@@ -84,9 +96,34 @@ function Model({ url, materialMode, hiddenParts, explode, onParts }) {
     });
 
     return clone;
-  }, [scene, materialMode, hiddenParts, explode]);
+  }, [scene, materialMode, hiddenParts, explode, partColors]);
 
-  return <primitive object={cloned} />;
+  return (
+    <group ref={modelRef}>
+      <primitive object={cloned} />
+    </group>
+  );
+}
+
+function SceneApi({ modelRef, onApi }) {
+  const { gl } = useThree();
+
+  useEffect(() => {
+    if (!onApi) return;
+    onApi({
+      screenshot: () => gl.domElement.toDataURL("image/png"),
+      exportGlb: async () => {
+        if (!modelRef.current) throw new Error("El modelo aún no está listo");
+        const { GLTFExporter } = await import(
+          "three/examples/jsm/exporters/GLTFExporter.js"
+        );
+        const exporter = new GLTFExporter();
+        return exporter.parseAsync(modelRef.current, { binary: true });
+      },
+    });
+  }, [gl, modelRef, onApi]);
+
+  return null;
 }
 
 function Placeholder() {
@@ -126,10 +163,18 @@ export default function ViewerCanvas({
   distance = 4.2,
   hiddenParts = [],
   explode = 0,
+  partColors = {},
   onParts,
+  onApi,
 }) {
+  const modelRef = useRef(null);
+
   return (
-    <Canvas camera={{ position: [0, 0.6, 4.2], fov: 45 }} dpr={[1, 2]}>
+    <Canvas
+      camera={{ position: [0, 0.6, 4.2], fov: 45 }}
+      dpr={[1, 2]}
+      gl={{ preserveDrawingBuffer: true }}
+    >
       <color attach="background" args={["#fff5f9"]} />
       <ambientLight intensity={0.9} />
       <directionalLight position={[3, 4, 5]} intensity={1.1} />
@@ -139,6 +184,7 @@ export default function ViewerCanvas({
         color="#ffb8d4"
       />
       <CameraRig distance={distance} />
+      <SceneApi modelRef={modelRef} onApi={onApi} />
       <ModelBoundary>
         <Suspense fallback={<Placeholder />}>
           {modelUrl ? (
@@ -148,7 +194,9 @@ export default function ViewerCanvas({
                 materialMode={materialMode}
                 hiddenParts={hiddenParts}
                 explode={explode}
+                partColors={partColors}
                 onParts={onParts}
+                modelRef={modelRef}
               />
             </Center>
           ) : (

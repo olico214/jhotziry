@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
+  Download,
+  Image as ImageIcon,
   Loader2,
   Maximize2,
   Minimize2,
+  Palette,
   RotateCcw,
   ZoomIn,
   ZoomOut,
@@ -28,11 +31,26 @@ const MODES = [
   { id: "resin", label: "Resina", soon: true },
 ];
 
+const FILAMENTS = [
+  { name: "Blanco", hex: "#f4f4f5" },
+  { name: "Gris", hex: "#9aa0a6" },
+  { name: "Negro", hex: "#2b2b2b" },
+  { name: "Rojo", hex: "#d64545" },
+  { name: "Naranja", hex: "#f08a3c" },
+  { name: "Amarillo", hex: "#f2c94c" },
+  { name: "Verde", hex: "#4fa86a" },
+  { name: "Azul", hex: "#3f7fd6" },
+  { name: "Rosa", hex: "#e86aa6" },
+  { name: "Morado", hex: "#8e5bd0" },
+  { name: "Marrón", hex: "#8a5a3b" },
+  { name: "Piel", hex: "#e8b995" },
+];
+
 const MIN_DISTANCE = 2;
 const MAX_DISTANCE = 9;
 const DEFAULT_DISTANCE = 4.2;
 
-export function Model3DViewer({ draftId, version, hasModel, hasParts }) {
+export function Model3DViewer({ draftId, version, hasModel, hasParts, canDownload }) {
   const containerRef = useRef(null);
   const [mode, setMode] = useState("textured");
   const [source, setSource] = useState(
@@ -44,6 +62,10 @@ export function Model3DViewer({ draftId, version, hasModel, hasParts }) {
   const [explode, setExplode] = useState(0);
   const [parts, setParts] = useState([]);
   const [hiddenParts, setHiddenParts] = useState([]);
+  const [partColors, setPartColors] = useState({});
+  const [selectedPart, setSelectedPart] = useState(null);
+  const [api, setApi] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   const modelUrl =
@@ -57,12 +79,51 @@ export function Model3DViewer({ draftId, version, hasModel, hasParts }) {
     );
   }, []);
 
+  const handleApi = useCallback((value) => setApi(value), []);
+
   const changeSource = (next) => {
     if (next === source) return;
     setSource(next);
     setParts([]);
     setHiddenParts([]);
     setExplode(0);
+    setPartColors({});
+    setSelectedPart(null);
+  };
+
+  const setPartColor = (name, hex) =>
+    setPartColors((prev) => {
+      const next = { ...prev };
+      if (hex) next[name] = hex;
+      else delete next[name];
+      return next;
+    });
+
+  const downloadPng = () => {
+    if (!api?.screenshot) return;
+    const link = document.createElement("a");
+    link.href = api.screenshot();
+    link.download = `pedido-${draftId}-${source}.png`;
+    link.click();
+  };
+
+  const downloadGlb = async () => {
+    if (!api?.exportGlb) return;
+    setExporting(true);
+    try {
+      const buffer = await api.exportGlb();
+      const blob = new Blob([buffer], { type: "model/gltf-binary" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pedido-${draftId}-${source}-color.glb`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExporting(false);
+    } finally {
+      setExporting(false);
+    }
   };
 
   useEffect(() => {
@@ -143,7 +204,9 @@ export function Model3DViewer({ draftId, version, hasModel, hasParts }) {
           distance={distance}
           hiddenParts={hiddenParts}
           explode={explode}
+          partColors={source === "parts" ? partColors : {}}
           onParts={handleParts}
+          onApi={handleApi}
         />
 
         <div className="absolute bottom-3 right-3 flex flex-col gap-1.5">
@@ -269,6 +332,99 @@ export function Model3DViewer({ draftId, version, hasModel, hasParts }) {
           color) estarán próximamente.
         </p>
       )}
+
+      {source === "parts" && parts.length > 0 ? (
+        <div className="space-y-3 rounded-3xl border border-blush-100 glass-soft p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Palette className="h-4 w-4 text-blush-500" />
+            <span className="text-xs font-semibold text-ink">
+              Pintar filamentos
+            </span>
+            <span className="text-xs text-ink-soft">
+              Elige una parte y luego un color de filamento
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {parts.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setSelectedPart(name)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                  selectedPart === name
+                    ? "border-blush-400 bg-blush-100 text-blush-700"
+                    : "border-blush-200 glass text-ink-soft",
+                )}
+              >
+                <span
+                  className="h-3.5 w-3.5 rounded-full border border-black/10"
+                  style={{ backgroundColor: partColors[name] || "#e6e2e8" }}
+                />
+                {name}
+              </button>
+            ))}
+          </div>
+
+          {selectedPart ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {FILAMENTS.map((filament) => (
+                <button
+                  key={filament.hex}
+                  type="button"
+                  title={filament.name}
+                  onClick={() => setPartColor(selectedPart, filament.hex)}
+                  className={cn(
+                    "h-7 w-7 rounded-full border-2 transition-transform hover:scale-110",
+                    partColors[selectedPart] === filament.hex
+                      ? "border-blush-500"
+                      : "border-white",
+                  )}
+                  style={{ backgroundColor: filament.hex }}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => setPartColor(selectedPart, null)}
+                className="rounded-full border border-blush-200 glass px-3 py-1 text-xs font-semibold text-ink-soft transition-colors hover:text-ink"
+              >
+                Sin color
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-ink-soft">
+              Toca una parte para asignarle un filamento.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {canDownload ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={downloadPng}
+            className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink"
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            Descargar imagen
+          </button>
+          <button
+            type="button"
+            onClick={downloadGlb}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink disabled:opacity-60"
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            GLB coloreado
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -93,6 +93,7 @@ export default async function OrderDetailPage({ params }) {
             version={new Date(order.updatedAt).getTime()}
             hasModel={Boolean(order.modelPath)}
             hasParts={Boolean(order.modelPartsPath)}
+            canDownload={user.isAdmin}
           />
           <p className="mt-2 text-xs text-ink-soft">
             Vista previa en 3D. La descarga del modelo la gestiona el equipo.
