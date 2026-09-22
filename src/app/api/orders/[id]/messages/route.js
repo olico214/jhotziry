@@ -98,20 +98,23 @@ export async function POST(request, ctx) {
 
   const preview = parsed.data.body.slice(0, 120);
 
+  const orderLabel = loaded.order.description || "Pieza impresa";
+  const link = `/mis-pedidos/${id}#chat`;
+
   if (guard.user.isAdmin && loaded.order.userId !== guard.user.id) {
     await notify(loaded.order.userId, {
       type: "order_message",
       title: "Nuevo mensaje del equipo",
-      body: preview,
-      link: `/mis-pedidos/${id}`,
+      body: `${orderLabel}: ${preview}`,
+      link,
     }).catch(() => {});
   } else {
     await notifyAdmins(
       {
         type: "order_message",
         title: "Nuevo mensaje del cliente",
-        body: preview,
-        link: "/admin",
+        body: `${orderLabel}: ${preview}`,
+        link,
       },
       guard.user.id,
     ).catch(() => {});

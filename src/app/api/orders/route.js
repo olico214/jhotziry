@@ -98,7 +98,7 @@ export async function POST(request) {
     type: "new_order",
     title: "Nuevo pedido",
     body: `${parsed.data.name}: ${parsed.data.description || "Pieza impresa"}`,
-    link: "/admin",
+    link: `/mis-pedidos/${order.id}`,
   }).catch(() => {});
 
   return NextResponse.json({ ok: true, orderId: order.id });

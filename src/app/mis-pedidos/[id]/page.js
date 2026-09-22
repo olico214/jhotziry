@@ -182,7 +182,7 @@ export default async function OrderDetailPage({ params }) {
         )}
       </section>
 
-      <section className="mt-10">
+      <section id="chat" className="mt-10 scroll-mt-24">
         <h2 className="mb-4 text-lg font-bold text-ink">
           Mensajes con el equipo
         </h2>

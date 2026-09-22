@@ -91,6 +91,7 @@ src/lib/
 - **Un borrador por generación**: el cliente **no reutiliza** `draftId`; cada generación crea un `draft` nuevo (así cada pedido conserva su propia imagen). `resolveUserDraft` además crea uno nuevo si el draft recibido ya tiene imagen/modelo. `/api/preview/[id]` responde `Cache-Control: no-store`.
 - **Una generación por usuario**: el cliente bloquea el botón al instante (`pending`); el servidor devuelve **409** (`src/lib/jobs/active.js` → `hasActiveJob`) si el usuario ya tiene un job `queued`/`processing`. No aplica a la generación de modelo 3D del admin.
 - **Imágenes**: todos los `<img>` de contenido usan `loading="lazy"` y `decoding="async"`.
+- **Notificaciones**: tabla `notifications` + campana en el header (`/api/notifications`, `/api/notifications/read`). Se crean al recibir un **pedido nuevo** (al admin), un **mensaje de pedido** (a la otra parte) y **publicaciones/comentarios**. Cada una enlaza al recurso concreto: pedidos → `/mis-pedidos/[id]` (mensajes → `/mis-pedidos/[id]#chat`), blog → `/blog#post-[id]`.
 - **Pedido**: el usuario pide su pieza → `orders` + `order_events` (timeline) + email a admin y cliente + notificación al admin. Chat por pedido con `order_messages`. El **panel admin reutiliza `OrdersBoard`** (la misma lista que "Mis pedidos") en la pestaña Pedidos; al hacer clic en un pedido se abre `/mis-pedidos/[id]`, que muestra imagen, datos, timeline y chat. Si el que mira es admin, ahí mismo aparecen las **acciones de admin** (Generar 3D / cambiar estado) vía `AdminOrderActions`.
 
 ### Rutas API (todas en `src/app/api`)
