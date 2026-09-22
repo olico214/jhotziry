@@ -120,6 +120,13 @@
       "when": 1790094869352,
       "tag": "0016_gorgeous_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790096682500,
+      "tag": "0017_striped_ogun",
+      "breakpoints": true
     }
   ]
 }

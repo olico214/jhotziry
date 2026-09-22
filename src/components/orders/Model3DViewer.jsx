@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import {
   Download,
   Image as ImageIcon,
@@ -10,6 +11,8 @@ import {
   Minimize2,
   Palette,
   RotateCcw,
+  Save,
+  Upload,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -57,14 +60,20 @@ export function Model3DViewer({
   version,
   hasModel,
   hasParts,
-  canDownload,
+  hasEdited,
+  savedColorUrl,
+  canDownloadImage,
+  canDownloadGlb,
+  canSaveColorModel,
+  canUploadEdited,
   canEdit = true,
   initialPartColors = {},
 }) {
+  const router = useRouter();
   const containerRef = useRef(null);
   const [mode, setMode] = useState("textured");
   const [source, setSource] = useState(
-    hasModel || !hasParts ? "textured" : "parts",
+    hasModel ? "textured" : hasParts ? "parts" : "edited",
   );
   const [autoRotate, setAutoRotate] = useState(true);
   const [resetKey, setResetKey] = useState(0);
@@ -77,13 +86,17 @@ export function Model3DViewer({
   const [api, setApi] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [saveState, setSaveState] = useState("idle");
+  const [serverState, setServerState] = useState("idle");
+  const [uploadState, setUploadState] = useState("idle");
   const [fullscreen, setFullscreen] = useState(false);
   const skipFirstSave = useRef(true);
 
   const modelUrl =
-    source === "parts"
-      ? `/api/files/${draftId}?kind=parts&v=${version}`
-      : `/api/files/${draftId}?v=${version}`;
+    source === "edited"
+      ? `/api/orders/${orderId}/model?kind=edited&v=${version}`
+      : source === "parts"
+        ? `/api/files/${draftId}?kind=parts&v=${version}`
+        : `/api/files/${draftId}?v=${version}`;
 
   const handleParts = useCallback((names) => {
     setParts((prev) =>
@@ -159,6 +172,48 @@ export function Model3DViewer({
     }
   };
 
+  const saveColorModel = async () => {
+    if (!api?.exportGlb) return;
+    setServerState("saving");
+    try {
+      const buffer = await api.exportGlb();
+      const form = new FormData();
+      form.append(
+        "file",
+        new Blob([buffer], { type: "model/gltf-binary" }),
+        `order-${orderId}-color.glb`,
+      );
+      const response = await apiFetch(
+        `/api/admin/orders/${orderId}/color-model`,
+        { method: "POST", body: form },
+      );
+      setServerState(response.ok ? "saved" : "error");
+      if (response.ok) router.refresh();
+    } catch {
+      setServerState("error");
+    }
+  };
+
+  const uploadEdited = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadState("uploading");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await apiFetch(
+        `/api/admin/orders/${orderId}/edited-model`,
+        { method: "POST", body: form },
+      );
+      setUploadState(response.ok ? "saved" : "error");
+      if (response.ok) router.refresh();
+    } catch {
+      setUploadState("error");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   useEffect(() => {
     const onChange = () =>
       setFullscreen(Boolean(document.fullscreenElement));
@@ -197,17 +252,20 @@ export function Model3DViewer({
     setHiddenParts([]);
   };
 
+  const sourceOptions = [
+    ...(hasModel ? [{ id: "textured", label: "Con color" }] : []),
+    ...(hasParts ? [{ id: "parts", label: "Por partes" }] : []),
+    ...(hasEdited ? [{ id: "edited", label: "Editado" }] : []),
+  ];
+
   return (
     <div className="space-y-3">
-      {hasModel && hasParts ? (
+      {sourceOptions.length > 1 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
             Modelo
           </span>
-          {[
-            { id: "textured", label: "Con color" },
-            { id: "parts", label: "Por partes" },
-          ].map((item) => (
+          {sourceOptions.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -446,29 +504,104 @@ export function Model3DViewer({
         </div>
       ) : null}
 
-      {canDownload ? (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={downloadPng}
-            className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink"
-          >
-            <ImageIcon className="h-3.5 w-3.5" />
-            Descargar imagen
-          </button>
-          <button
-            type="button"
-            onClick={downloadGlb}
-            disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink disabled:opacity-60"
-          >
-            {exporting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Download className="h-3.5 w-3.5" />
-            )}
-            GLB coloreado
-          </button>
+      {canDownloadImage || canDownloadGlb || canSaveColorModel || canUploadEdited ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {canDownloadImage ? (
+              <button
+                type="button"
+                onClick={downloadPng}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink"
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
+                Descargar imagen
+              </button>
+            ) : null}
+
+            {canDownloadGlb && source === "parts" ? (
+              <button
+                type="button"
+                onClick={downloadGlb}
+                disabled={exporting}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink disabled:opacity-60"
+              >
+                {exporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                GLB coloreado
+              </button>
+            ) : null}
+
+            {canSaveColorModel && source === "parts" ? (
+              <button
+                type="button"
+                onClick={saveColorModel}
+                disabled={serverState === "saving"}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink disabled:opacity-60"
+              >
+                {serverState === "saving" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                {serverState === "saved"
+                  ? "Coloreado guardado"
+                  : "Guardar coloreado"}
+              </button>
+            ) : null}
+
+            {canDownloadGlb && savedColorUrl ? (
+              <a
+                href={savedColorUrl}
+                download={`pedido-${orderId}-color.glb`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Descargar guardado
+              </a>
+            ) : null}
+
+            {canDownloadGlb && hasEdited ? (
+              <a
+                href={`/api/orders/${orderId}/model?kind=edited`}
+                download={`pedido-${orderId}-editado.glb`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:text-ink"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Descargar editado
+              </a>
+            ) : null}
+          </div>
+
+          {serverState === "error" ? (
+            <p className="text-xs font-semibold text-red-500">
+              No se pudo guardar el coloreado en el servidor.
+            </p>
+          ) : null}
+
+          {canUploadEdited ? (
+            <label className="flex flex-wrap items-center gap-2 text-xs font-semibold text-ink-soft">
+              <span className="inline-flex items-center gap-1.5">
+                <Upload className="h-3.5 w-3.5" />
+                Reemplazar modelo editado (GLB)
+              </span>
+              <input
+                type="file"
+                accept=".glb,model/gltf-binary"
+                onChange={uploadEdited}
+                className="text-xs"
+              />
+              {uploadState === "uploading" ? <span>Subiendo…</span> : null}
+              {uploadState === "saved" ? (
+                <span className="text-emerald-600">Actualizado</span>
+              ) : null}
+              {uploadState === "error" ? (
+                <span className="text-red-500">Error al subir</span>
+              ) : null}
+            </label>
+          ) : null}
         </div>
       ) : null}
     </div>

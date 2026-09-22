@@ -155,6 +155,8 @@ export const orders = pgTable(
     modelPath: text("model_path"),
     modelPartsPath: text("model_parts_path"),
     partColors: jsonb("part_colors"),
+    colorModelPath: text("color_model_path"),
+    editedModelPath: text("edited_model_path"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, Suspense, useEffect, useMemo, useRef } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { Canvas, useThree } from "@react-three/fiber";
 import {
@@ -58,7 +58,39 @@ function CameraRig({ distance }) {
   return null;
 }
 
-function Model({ url, materialMode, hiddenParts, explode, partColors, onParts, modelRef }) {
+function buildExportClone(scene, partColors) {
+  const clone = scene.clone(true);
+  let index = 0;
+
+  clone.traverse((object) => {
+    if (!object.isMesh) return;
+    const name = object.name || `Parte ${index + 1}`;
+    index += 1;
+
+    object.visible = true;
+
+    const paintedColor = partColors?.[name];
+    if (paintedColor) {
+      object.material = new THREE.MeshStandardMaterial({
+        color: paintedColor,
+        roughness: 0.65,
+        metalness: 0.05,
+      });
+    }
+  });
+
+  return clone;
+}
+
+function Model({
+  url,
+  materialMode,
+  hiddenParts,
+  explode,
+  partColors,
+  onParts,
+  onScene,
+}) {
   const { scene } = useGLTF(url);
 
   const parts = useMemo(() => {
@@ -72,6 +104,10 @@ function Model({ url, materialMode, hiddenParts, explode, partColors, onParts, m
   useEffect(() => {
     onParts?.(parts);
   }, [parts, onParts]);
+
+  useEffect(() => {
+    onScene?.(scene);
+  }, [scene, onScene]);
 
   const cloned = useMemo(() => {
     const clone = scene.clone(true);
@@ -98,14 +134,10 @@ function Model({ url, materialMode, hiddenParts, explode, partColors, onParts, m
     return clone;
   }, [scene, materialMode, hiddenParts, explode, partColors]);
 
-  return (
-    <group ref={modelRef}>
-      <primitive object={cloned} />
-    </group>
-  );
+  return <primitive object={cloned} />;
 }
 
-function SceneApi({ modelRef, onApi }) {
+function SceneApi({ sceneRef, partColorsRef, onApi }) {
   const { gl } = useThree();
 
   useEffect(() => {
@@ -113,15 +145,17 @@ function SceneApi({ modelRef, onApi }) {
     onApi({
       screenshot: () => gl.domElement.toDataURL("image/png"),
       exportGlb: async () => {
-        if (!modelRef.current) throw new Error("El modelo aún no está listo");
+        const scene = sceneRef.current;
+        if (!scene) throw new Error("El modelo aún no está listo");
+        const clone = buildExportClone(scene, partColorsRef.current);
         const { GLTFExporter } = await import(
           "three/examples/jsm/exporters/GLTFExporter.js"
         );
         const exporter = new GLTFExporter();
-        return exporter.parseAsync(modelRef.current, { binary: true });
+        return exporter.parseAsync(clone, { binary: true });
       },
     });
-  }, [gl, modelRef, onApi]);
+  }, [gl, sceneRef, partColorsRef, onApi]);
 
   return null;
 }
@@ -167,7 +201,16 @@ export default function ViewerCanvas({
   onParts,
   onApi,
 }) {
-  const modelRef = useRef(null);
+  const sceneRef = useRef(null);
+  const partColorsRef = useRef(partColors);
+
+  useEffect(() => {
+    partColorsRef.current = partColors;
+  }, [partColors]);
+
+  const handleScene = useCallback((scene) => {
+    sceneRef.current = scene;
+  }, []);
 
   return (
     <Canvas
@@ -184,7 +227,11 @@ export default function ViewerCanvas({
         color="#ffb8d4"
       />
       <CameraRig distance={distance} />
-      <SceneApi modelRef={modelRef} onApi={onApi} />
+      <SceneApi
+        sceneRef={sceneRef}
+        partColorsRef={partColorsRef}
+        onApi={onApi}
+      />
       <ModelBoundary>
         <Suspense fallback={<Placeholder />}>
           {modelUrl ? (
@@ -196,7 +243,7 @@ export default function ViewerCanvas({
                 explode={explode}
                 partColors={partColors}
                 onParts={onParts}
-                modelRef={modelRef}
+                onScene={handleScene}
               />
             </Center>
           ) : (

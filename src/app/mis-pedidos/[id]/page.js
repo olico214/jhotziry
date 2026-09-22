@@ -98,7 +98,7 @@ export default async function OrderDetailPage({ params }) {
         </div>
       ) : null}
 
-      {order.modelPath || order.modelPartsPath ? (
+      {order.modelPath || order.modelPartsPath || order.editedModelPath ? (
         <section className="mt-8">
           <h2 className="mb-4 text-lg font-bold text-ink">Modelo 3D</h2>
           <Model3DViewer
@@ -107,7 +107,16 @@ export default async function OrderDetailPage({ params }) {
             version={new Date(order.updatedAt).getTime()}
             hasModel={Boolean(order.modelPath)}
             hasParts={Boolean(order.modelPartsPath)}
-            canDownload={user.isAdmin}
+            hasEdited={Boolean(order.editedModelPath)}
+            savedColorUrl={
+              user.isAdmin && order.colorModelPath
+                ? `/api/orders/${order.id}/model?kind=color&v=${new Date(order.updatedAt).getTime()}`
+                : null
+            }
+            canDownloadImage
+            canDownloadGlb={user.isAdmin}
+            canSaveColorModel={user.isAdmin}
+            canUploadEdited={user.isAdmin && clientCanEditModel}
             canEdit={canEditModel}
             initialPartColors={order.partColors || {}}
           />
