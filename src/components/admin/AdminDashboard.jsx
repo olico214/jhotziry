@@ -14,6 +14,7 @@ import {
   Search,
   ShieldCheck,
   Star,
+  Tag,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +23,7 @@ import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
 import { OrdersBoard } from "@/components/orders/OrdersBoard";
+import { StatusManager } from "@/components/admin/StatusManager";
 
 const TABS = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
@@ -29,9 +31,18 @@ const TABS = [
   { id: "usuarios", label: "Usuarios", icon: Users },
   { id: "blog", label: "Blog", icon: Star },
   { id: "invitaciones", label: "Invitaciones", icon: Inbox },
+  { id: "estados", label: "Estados", icon: Tag },
 ];
 
-const ORDER_STATUS = ["new", "generating", "ready", "failed", "done", "cancelled"];
+const DEFAULT_STATUS_KEYS = [
+  "new",
+  "generating",
+  "ready",
+  "confirmed",
+  "failed",
+  "done",
+  "cancelled",
+];
 
 export function AdminDashboard({
   users,
@@ -39,6 +50,7 @@ export function AdminDashboard({
   invitations,
   accessRequests,
   posts = [],
+  statuses = [],
 }) {
   const router = useRouter();
   const [tab, setTab] = useState("resumen");
@@ -73,8 +85,11 @@ export function AdminDashboard({
   );
 
   const stats = useMemo(() => {
+    const keys = statuses.length
+      ? statuses.map((item) => item.key)
+      : DEFAULT_STATUS_KEYS;
     const byStatus = {};
-    for (const status of ORDER_STATUS) byStatus[status] = 0;
+    for (const status of keys) byStatus[status] = 0;
     for (const { order } of orders) {
       byStatus[order.status] = (byStatus[order.status] || 0) + 1;
     }
@@ -85,7 +100,7 @@ export function AdminDashboard({
       credits: users.reduce((sum, user) => sum + (user.credits || 0), 0),
       pendingRequests: accessRequests?.length || 0,
     };
-  }, [orders, users, accessRequests]);
+  }, [orders, users, accessRequests, statuses]);
 
   const filteredUsers = useMemo(() => {
     const texto = userQuery.trim().toLowerCase();
@@ -268,7 +283,13 @@ export function AdminDashboard({
 
       {tab === "pedidos" ? (
         <section className="space-y-5">
-          <OrdersBoard orders={boardOrders} />
+          <OrdersBoard orders={boardOrders} statuses={statuses} />
+        </section>
+      ) : null}
+
+      {tab === "estados" ? (
+        <section className="space-y-5">
+          <StatusManager statuses={statuses} />
         </section>
       ) : null}
 

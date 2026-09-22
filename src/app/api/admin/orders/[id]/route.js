@@ -4,9 +4,10 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { orderEvents, orders } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/guard";
+import { getOrderStatusByKey } from "@/lib/orders/statuses";
 
 const schema = z.object({
-  status: z.enum(["new", "generating", "ready", "failed", "done", "cancelled"]),
+  status: z.string().trim().min(1).max(40),
 });
 
 export async function PATCH(request, ctx) {
@@ -15,6 +16,11 @@ export async function PATCH(request, ctx) {
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
+    return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
+  }
+
+  const statusDef = await getOrderStatusByKey(parsed.data.status);
+  if (!statusDef) {
     return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
   }
 
@@ -33,7 +39,7 @@ export async function PATCH(request, ctx) {
   await db.insert(orderEvents).values({
     orderId: id,
     status: parsed.data.status,
-    note: "Estado actualizado por el administrador",
+    note: `Estado actualizado: ${statusDef.label}`,
   });
 
   return NextResponse.json({ ok: true });

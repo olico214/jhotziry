@@ -14,6 +14,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client";
 
 const ViewerCanvas = dynamic(() => import("@/components/create/ViewerCanvas"), {
   ssr: false,
@@ -50,7 +51,16 @@ const MIN_DISTANCE = 2;
 const MAX_DISTANCE = 9;
 const DEFAULT_DISTANCE = 4.2;
 
-export function Model3DViewer({ draftId, version, hasModel, hasParts, canDownload }) {
+export function Model3DViewer({
+  draftId,
+  orderId,
+  version,
+  hasModel,
+  hasParts,
+  canDownload,
+  canEdit = true,
+  initialPartColors = {},
+}) {
   const containerRef = useRef(null);
   const [mode, setMode] = useState("textured");
   const [source, setSource] = useState(
@@ -62,11 +72,13 @@ export function Model3DViewer({ draftId, version, hasModel, hasParts, canDownloa
   const [explode, setExplode] = useState(0);
   const [parts, setParts] = useState([]);
   const [hiddenParts, setHiddenParts] = useState([]);
-  const [partColors, setPartColors] = useState({});
+  const [partColors, setPartColors] = useState(() => ({ ...initialPartColors }));
   const [selectedPart, setSelectedPart] = useState(null);
   const [api, setApi] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [saveState, setSaveState] = useState("idle");
   const [fullscreen, setFullscreen] = useState(false);
+  const skipFirstSave = useRef(true);
 
   const modelUrl =
     source === "parts"
@@ -81,13 +93,34 @@ export function Model3DViewer({ draftId, version, hasModel, hasParts, canDownloa
 
   const handleApi = useCallback((value) => setApi(value), []);
 
+  useEffect(() => {
+    if (!canEdit || !orderId) return undefined;
+    if (skipFirstSave.current) {
+      skipFirstSave.current = false;
+      return undefined;
+    }
+    const timer = setTimeout(async () => {
+      setSaveState("saving");
+      try {
+        const response = await apiFetch(`/api/orders/${orderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ partColors }),
+        });
+        setSaveState(response.ok ? "saved" : "error");
+      } catch {
+        setSaveState("error");
+      }
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [partColors, canEdit, orderId]);
+
   const changeSource = (next) => {
     if (next === source) return;
     setSource(next);
     setParts([]);
     setHiddenParts([]);
     setExplode(0);
-    setPartColors({});
     setSelectedPart(null);
   };
 
@@ -333,7 +366,7 @@ export function Model3DViewer({ draftId, version, hasModel, hasParts, canDownloa
         </p>
       )}
 
-      {source === "parts" && parts.length > 0 ? (
+      {canEdit && source === "parts" && parts.length > 0 ? (
         <div className="space-y-3 rounded-3xl border border-blush-100 glass-soft p-3">
           <div className="flex flex-wrap items-center gap-2">
             <Palette className="h-4 w-4 text-blush-500" />
@@ -343,6 +376,19 @@ export function Model3DViewer({ draftId, version, hasModel, hasParts, canDownloa
             <span className="text-xs text-ink-soft">
               Elige una parte y luego un color de filamento
             </span>
+            {saveState === "saving" ? (
+              <span className="text-xs text-ink-soft">Guardando…</span>
+            ) : null}
+            {saveState === "saved" ? (
+              <span className="text-xs font-semibold text-emerald-600">
+                Colores guardados
+              </span>
+            ) : null}
+            {saveState === "error" ? (
+              <span className="text-xs font-semibold text-red-500">
+                No se pudo guardar
+              </span>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">

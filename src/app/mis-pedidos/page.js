@@ -4,6 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { drafts, orders } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getOrderStatuses } from "@/lib/orders/statuses";
 import { Button } from "@/components/ui/Button";
 import { OrdersBoard } from "@/components/orders/OrdersBoard";
 
@@ -38,6 +39,8 @@ export default async function MisPedidosPage() {
         : null,
   }));
 
+  const statuses = await getOrderStatuses();
+
   return (
     <main className="mx-auto w-full max-w-6xl px-5 py-10">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -54,7 +57,7 @@ export default async function MisPedidosPage() {
         </Link>
       </div>
 
-      <OrdersBoard orders={serialized} />
+      <OrdersBoard orders={serialized} statuses={statuses} />
     </main>
   );
 }

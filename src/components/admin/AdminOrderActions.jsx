@@ -7,16 +7,15 @@ import { Button } from "@/components/ui/Button";
 import { apiFetch } from "@/lib/api-client";
 import { TRIPO_COST_MODEL, TRIPO_COST_PARTS } from "@/lib/config";
 
-const STATUS = ["new", "generating", "ready", "failed", "done", "cancelled"];
-
-const STATUS_LABEL = {
-  new: "Nuevo",
-  generating: "Generando modelo",
-  ready: "Modelo listo",
-  failed: "Error",
-  done: "Completado",
-  cancelled: "Cancelado",
-};
+const FALLBACK_STATUSES = [
+  { value: "new", label: "Nuevo" },
+  { value: "generating", label: "Generando modelo" },
+  { value: "ready", label: "Modelo listo" },
+  { value: "confirmed", label: "Confirmado por cliente" },
+  { value: "failed", label: "Error" },
+  { value: "done", label: "Completado" },
+  { value: "cancelled", label: "Cancelado" },
+];
 
 const MODES = [
   { value: "textured", label: "Texturizado", cost: TRIPO_COST_MODEL },
@@ -34,9 +33,14 @@ export function AdminOrderActions({
   status: initialStatus,
   hasModel,
   hasParts,
+  statuses = [],
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
+  const options =
+    statuses.length > 0
+      ? statuses.map((item) => ({ value: item.key, label: item.label }))
+      : FALLBACK_STATUSES;
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState(
@@ -152,9 +156,9 @@ export function AdminOrderActions({
         onChange={(event) => changeStatus(event.target.value)}
         className="rounded-full border border-blush-200 glass px-3 py-2 text-xs font-semibold text-ink"
       >
-        {STATUS.map((value) => (
-          <option key={value} value={value}>
-            {STATUS_LABEL[value]}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>

@@ -154,6 +154,7 @@ export const orders = pgTable(
     status: text("status").notNull().default("new"),
     modelPath: text("model_path"),
     modelPartsPath: text("model_parts_path"),
+    partColors: jsonb("part_colors"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -328,6 +329,20 @@ export const quoteRequests = pgTable("quote_requests", {
   message: text("message").notNull(),
   filePath: text("file_path"),
   status: text("status").notNull().default("new"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const orderStatuses = pgTable("order_statuses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  description: text("description"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  clientCanEditModel: boolean("client_can_edit_model").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  isSystem: boolean("is_system").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

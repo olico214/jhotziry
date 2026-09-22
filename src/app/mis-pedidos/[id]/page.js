@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { drafts, orderEvents, orders } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getOrderStatuses } from "@/lib/orders/statuses";
 import { Button } from "@/components/ui/Button";
 import { OrderChat } from "@/components/orders/OrderChat";
 import { AdminOrderActions } from "@/components/admin/AdminOrderActions";
@@ -14,10 +15,11 @@ export const metadata = {
   title: "Detalle del pedido",
 };
 
-const STATUS_LABEL = {
+const FALLBACK_LABEL = {
   new: "Pedido recibido",
   generating: "Preparando el modelo",
   ready: "Modelo listo",
+  confirmed: "Confirmado por cliente",
   failed: "Revisión manual",
   done: "Completado",
   cancelled: "Cancelado",
@@ -27,6 +29,7 @@ const STATUS_DOT = {
   new: "bg-blush-400",
   generating: "bg-amber-400",
   ready: "bg-emerald-400",
+  confirmed: "bg-sky-400",
   failed: "bg-red-400",
   done: "bg-emerald-500",
   cancelled: "bg-zinc-400",
@@ -59,6 +62,15 @@ export default async function OrderDetailPage({ params }) {
     .where(eq(orderEvents.orderId, order.id))
     .orderBy(asc(orderEvents.createdAt));
 
+  const statuses = await getOrderStatuses({ includeInactive: true });
+  const statusLabel = {
+    ...FALLBACK_LABEL,
+    ...Object.fromEntries(statuses.map((item) => [item.key, item.label])),
+  };
+  const statusDef = statuses.find((item) => item.key === order.status);
+  const clientCanEditModel = Boolean(statusDef?.clientCanEditModel);
+  const canEditModel = user.isAdmin || clientCanEditModel;
+
   const previewUrl =
     draft && (draft.previewImage || draft.previewPath)
       ? `/api/preview/${draft.id}?v=${new Date(draft.updatedAt).getTime()}`
@@ -81,6 +93,7 @@ export default async function OrderDetailPage({ params }) {
             status={order.status}
             hasModel={Boolean(order.modelPath)}
             hasParts={Boolean(order.modelPartsPath)}
+            statuses={statuses.filter((item) => item.active)}
           />
         </div>
       ) : null}
@@ -90,13 +103,18 @@ export default async function OrderDetailPage({ params }) {
           <h2 className="mb-4 text-lg font-bold text-ink">Modelo 3D</h2>
           <Model3DViewer
             draftId={order.draftId}
+            orderId={order.id}
             version={new Date(order.updatedAt).getTime()}
             hasModel={Boolean(order.modelPath)}
             hasParts={Boolean(order.modelPartsPath)}
             canDownload={user.isAdmin}
+            canEdit={canEditModel}
+            initialPartColors={order.partColors || {}}
           />
           <p className="mt-2 text-xs text-ink-soft">
-            Vista previa en 3D. La descarga del modelo la gestiona el equipo.
+            {canEditModel
+              ? "Vista previa en 3D. La descarga del modelo la gestiona el equipo."
+              : "Vista en 3D. En este estado ya no se pueden cambiar los colores; puedes girar y hacer zoom, pero la descarga la gestiona el equipo."}
           </p>
         </section>
       ) : null}
@@ -121,7 +139,7 @@ export default async function OrderDetailPage({ params }) {
               {order.description || "Pieza impresa"}
             </h1>
             <span className="rounded-full bg-blush-100 px-3 py-1 text-xs font-semibold text-blush-700">
-              {STATUS_LABEL[order.status] || order.status}
+              {statusLabel[order.status] || order.status}
             </span>
           </div>
 
@@ -185,7 +203,7 @@ export default async function OrderDetailPage({ params }) {
                   />
                   <div>
                     <p className="text-sm font-semibold text-ink">
-                      {STATUS_LABEL[event.status] || event.status}
+                      {statusLabel[event.status] || event.status}
                     </p>
                     {event.note ? (
                       <p className="text-xs text-ink-soft">{event.note}</p>

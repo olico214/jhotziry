@@ -14,32 +14,32 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 
-const STATUS_OPTIONS = [
-  { id: "all", label: "Todos" },
-  { id: "new", label: "Recibido" },
-  { id: "generating", label: "Preparando" },
-  { id: "ready", label: "Listo" },
-  { id: "failed", label: "Revisión" },
-  { id: "done", label: "Completado" },
-  { id: "cancelled", label: "Cancelado" },
+const DEFAULT_STATUSES = [
+  { key: "new", label: "Nuevo" },
+  { key: "generating", label: "Generando modelo" },
+  { key: "ready", label: "Modelo listo" },
+  { key: "confirmed", label: "Confirmado por cliente" },
+  { key: "failed", label: "Error" },
+  { key: "done", label: "Completado" },
+  { key: "cancelled", label: "Cancelado" },
 ];
 
-const STATUS_LABEL = {
-  new: "Recibido",
-  generating: "Preparando el modelo",
-  ready: "Modelo listo",
-  failed: "Revisión manual",
-  done: "Completado",
-  cancelled: "Cancelado",
-};
-
-export function OrdersBoard({ orders }) {
+export function OrdersBoard({ orders, statuses = [] }) {
   const [status, setStatus] = useState("all");
   const [query, setQuery] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [sort, setSort] = useState("recent");
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const statusList = statuses.length > 0 ? statuses : DEFAULT_STATUSES;
+  const statusOptions = [
+    { id: "all", label: "Todos" },
+    ...statusList.map((item) => ({ id: item.key, label: item.label })),
+  ];
+  const statusLabel = Object.fromEntries(
+    statusList.map((item) => [item.key, item.label]),
+  );
 
   const activeFilters =
     (status !== "all" ? 1 : 0) +
@@ -133,6 +133,7 @@ export function OrdersBoard({ orders }) {
         <div className="space-y-4">
           <FilterFields
             stacked
+            options={statusOptions}
             status={status}
             setStatus={setStatus}
             from={from}
@@ -217,7 +218,7 @@ export function OrdersBoard({ orders }) {
                       : "bg-blush-100 text-blush-700",
                 )}
               >
-                {STATUS_LABEL[order.status] || order.status}
+                {statusLabel[order.status] || order.status}
               </span>
               <ChevronRight className="h-4 w-4 text-blush-300" />
             </Link>
@@ -230,6 +231,7 @@ export function OrdersBoard({ orders }) {
 
 function FilterFields({
   stacked,
+  options,
   status,
   setStatus,
   from,
@@ -255,7 +257,7 @@ function FilterFields({
           onChange={(event) => setStatus(event.target.value)}
           className={selectClass}
         >
-          {STATUS_OPTIONS.map((option) => (
+          {options.map((option) => (
             <option key={option.id} value={option.id}>
               {option.label}
             </option>

@@ -10,6 +10,7 @@ import {
   users,
 } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getOrderStatuses } from "@/lib/orders/statuses";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 
 export const metadata = {
@@ -21,8 +22,7 @@ export default async function AdminPage() {
   if (!user?.isAdmin) notFound();
 
   const [userRows, orderRows, invitationRows, requestRows, postRows] =
-    await Promise.all([
-    db
+    await Promise.all([    db
       .select({
         id: users.id,
         email: users.email,
@@ -81,6 +81,8 @@ export default async function AdminPage() {
       .limit(100),
   ]);
 
+  const statuses = await getOrderStatuses({ includeInactive: true });
+
   const serializedPosts = postRows.map((post) => ({
     id: post.id,
     title: post.title,
@@ -112,6 +114,7 @@ export default async function AdminPage() {
         invitations={invitationRows}
         accessRequests={requestRows}
         posts={serializedPosts}
+        statuses={statuses}
       />
     </main>
   );
