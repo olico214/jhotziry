@@ -6,6 +6,7 @@ import { drafts, orderEvents, orders } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
 import { Button } from "@/components/ui/Button";
 import { OrderChat } from "@/components/orders/OrderChat";
+import { AdminOrderActions } from "@/components/admin/AdminOrderActions";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -65,11 +66,22 @@ export default async function OrderDetailPage({ params }) {
   return (
     <main className="mx-auto w-full max-w-4xl px-5 py-10">
       <Link
-        href="/mis-pedidos"
+        href={user.isAdmin ? "/admin" : "/mis-pedidos"}
         className="text-sm font-semibold text-blush-600 hover:underline"
       >
-        ← Volver a mis pedidos
+        {user.isAdmin ? "← Volver al panel" : "← Volver a mis pedidos"}
       </Link>
+
+      {user.isAdmin ? (
+        <div className="mt-4">
+          <AdminOrderActions
+            orderId={order.id}
+            draftId={order.draftId}
+            status={order.status}
+            hasModel={Boolean(order.modelPath)}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-6 sm:grid-cols-[240px_1fr]">
         <div className="h-60 w-full overflow-hidden rounded-4xl border border-blush-100 bg-blush-50">

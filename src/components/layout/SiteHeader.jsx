@@ -17,6 +17,7 @@ import {
 import { APP_NAME } from "@/lib/config";
 import { Button } from "@/components/ui/Button";
 import { AuthModal } from "@/components/create/AuthModal";
+import { NotificationsBell } from "@/components/layout/NotificationsBell";
 import { useSession } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +63,7 @@ export function SiteHeader() {
 
           {user ? (
             <>
+              <NotificationsBell />
               <span className="ml-1 inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-3 py-1.5 text-xs font-semibold text-ink">
                 <Coins className="h-3.5 w-3.5 text-blush-500" />
                 {credits}
@@ -106,6 +108,7 @@ export function SiteHeader() {
           >
             <Newspaper className="h-5 w-5" />
           </MobileIconLink>
+          {user ? <NotificationsBell /> : null}
           {user ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-blush-200 glass px-2.5 py-1.5 text-xs font-semibold text-ink">
               <Coins className="h-3.5 w-3.5 text-blush-500" />

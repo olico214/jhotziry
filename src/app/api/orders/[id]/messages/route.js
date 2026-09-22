@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { orderMessages, orders } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/guard";
 import { limitByKey } from "@/lib/security/rate-limit";
+import { notify, notifyAdmins } from "@/lib/notifications";
 
 const schema = z.object({
   body: z.string().trim().min(1, "Escribe un mensaje").max(1000),
@@ -94,6 +95,27 @@ export async function POST(request, ctx) {
       body: parsed.data.body,
     })
     .returning({ id: orderMessages.id });
+
+  const preview = parsed.data.body.slice(0, 120);
+
+  if (guard.user.isAdmin && loaded.order.userId !== guard.user.id) {
+    await notify(loaded.order.userId, {
+      type: "order_message",
+      title: "Nuevo mensaje del equipo",
+      body: preview,
+      link: `/mis-pedidos/${id}`,
+    }).catch(() => {});
+  } else {
+    await notifyAdmins(
+      {
+        type: "order_message",
+        title: "Nuevo mensaje del cliente",
+        body: preview,
+        link: "/admin",
+      },
+      guard.user.id,
+    ).catch(() => {});
+  }
 
   return NextResponse.json({ ok: true, id: created.id });
 }

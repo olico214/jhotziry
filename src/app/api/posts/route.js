@@ -4,6 +4,7 @@ import { posts } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
 import { requireUser } from "@/lib/auth/guard";
 import { limitByKey } from "@/lib/security/rate-limit";
+import { notifyAdmins } from "@/lib/notifications";
 import { listPosts } from "@/lib/posts/queries";
 import { extensionFor } from "@/lib/storage/files";
 import { imageRecordFromBuffer, mimeFromExtension } from "@/lib/storage/images";
@@ -93,6 +94,13 @@ export async function POST(request) {
       image,
     })
     .returning({ id: posts.id });
+
+  await notifyAdmins({
+    type: "new_post",
+    title: "Nueva publicación en el blog",
+    body: `${user.fullName || "Alguien"}: ${(title || body || "").slice(0, 100)}`,
+    link: `/blog#post-${created.id}`,
+  }).catch(() => {});
 
   return NextResponse.json({ ok: true, id: created.id });
 }

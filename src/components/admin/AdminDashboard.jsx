@@ -5,29 +5,23 @@ import { useRouter } from "next/navigation";
 import {
   Clock,
   Coins,
-  Download,
   Inbox,
   LayoutDashboard,
   Loader2,
   Mail,
-  MessageSquare,
   Package,
   Plus,
-  RefreshCw,
-  RotateCcw,
   Search,
   ShieldCheck,
-  SlidersHorizontal,
   Star,
   Users,
-  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FormError, Input } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
-import { OrderChat } from "@/components/orders/OrderChat";
+import { OrdersBoard } from "@/components/orders/OrdersBoard";
 
 const TABS = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
@@ -38,15 +32,6 @@ const TABS = [
 ];
 
 const ORDER_STATUS = ["new", "generating", "ready", "failed", "done", "cancelled"];
-
-const STATUS_LABEL = {
-  new: "Nuevo",
-  generating: "Generando modelo",
-  ready: "Modelo listo",
-  failed: "Error",
-  done: "Completado",
-  cancelled: "Cancelado",
-};
 
 export function AdminDashboard({
   users,
@@ -62,30 +47,30 @@ export function AdminDashboard({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteResult, setInviteResult] = useState(null);
   const [inviting, setInviting] = useState(false);
-  const [orderStatus, setOrderStatus] = useState("all");
-  const [orderQuery, setOrderQuery] = useState("");
-  const [orderFrom, setOrderFrom] = useState("");
-  const [orderTo, setOrderTo] = useState("");
-  const [orderSort, setOrderSort] = useState("recent");
-  const [ordersFiltersOpen, setOrdersFiltersOpen] = useState(false);
-  const [chatOrderId, setChatOrderId] = useState(null);
   const [userQuery, setUserQuery] = useState("");
-
-  const activeOrderFilters =
-    (orderStatus !== "all" ? 1 : 0) +
-    (orderFrom ? 1 : 0) +
-    (orderTo ? 1 : 0) +
-    (orderSort !== "recent" ? 1 : 0);
-
-  const clearOrderFilters = () => {
-    setOrderStatus("all");
-    setOrderFrom("");
-    setOrderTo("");
-    setOrderSort("recent");
-  };
 
   const setOrderBusy = (id, value) =>
     setBusy((prev) => ({ ...prev, [id]: value }));
+
+  const boardOrders = useMemo(
+    () =>
+      orders.map(({ order, draft }) => ({
+        id: order.id,
+        status: order.status,
+        name: order.name,
+        email: order.email,
+        address: order.address,
+        description: order.description,
+        quantity: order.quantity,
+        createdAt: new Date(order.createdAt).toISOString(),
+        draftId: draft.id,
+        previewUrl:
+          draft.previewImage || draft.previewPath
+            ? `/api/preview/${draft.id}?v=${new Date(draft.updatedAt).getTime()}`
+            : null,
+      })),
+    [orders],
+  );
 
   const stats = useMemo(() => {
     const byStatus = {};
@@ -102,33 +87,6 @@ export function AdminDashboard({
     };
   }, [orders, users, accessRequests]);
 
-  const filteredOrders = useMemo(() => {
-    const texto = orderQuery.trim().toLowerCase();
-
-    const list = orders.filter((item) => {
-      const { order, email } = item;
-      if (orderStatus !== "all" && order.status !== orderStatus) return false;
-      const created = new Date(order.createdAt);
-      if (orderFrom && created < new Date(`${orderFrom}T00:00:00`)) return false;
-      if (orderTo && created > new Date(`${orderTo}T23:59:59`)) return false;
-      if (texto) {
-        const hay = `${order.name} ${email} ${order.description || ""} ${
-          order.address || ""
-        }`.toLowerCase();
-        if (!hay.includes(texto)) return false;
-      }
-      return true;
-    });
-
-    list.sort((a, b) => {
-      const da = new Date(a.order.createdAt).getTime();
-      const db = new Date(b.order.createdAt).getTime();
-      return orderSort === "recent" ? db - da : da - db;
-    });
-
-    return list;
-  }, [orders, orderStatus, orderQuery, orderFrom, orderTo, orderSort]);
-
   const filteredUsers = useMemo(() => {
     const texto = userQuery.trim().toLowerCase();
     if (!texto) return users;
@@ -138,51 +96,6 @@ export function AdminDashboard({
         .includes(texto),
     );
   }, [users, userQuery]);
-
-  const pollJob = async (jobId) => {
-    for (let i = 0; i < 120; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-      const response = await apiFetch(`/api/jobs/${jobId}`, { cache: "no-store" });
-      if (!response.ok) break;
-      const data = await response.json();
-      if (data.status === "succeeded" || data.status === "failed") {
-        return data.status;
-      }
-    }
-    return "timeout";
-  };
-
-  const generateModel = async (orderId) => {
-    setOrderBusy(orderId, "generating");
-    try {
-      const response = await apiFetch(`/api/admin/orders/${orderId}/generate`, {
-        method: "POST",
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setOrderBusy(orderId, "error");
-        return;
-      }
-      await pollJob(data.jobId);
-      router.refresh();
-    } finally {
-      setOrderBusy(orderId, null);
-    }
-  };
-
-  const updateStatus = async (orderId, status) => {
-    setOrderBusy(orderId, "status");
-    try {
-      await apiFetch(`/api/admin/orders/${orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      router.refresh();
-    } finally {
-      setOrderBusy(orderId, null);
-    }
-  };
 
   const adjustCredits = async (userId, amount, reason) => {
     await apiFetch("/api/admin/credits", {
@@ -353,190 +266,7 @@ export function AdminDashboard({
 
       {tab === "pedidos" ? (
         <section className="space-y-5">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-              <Input
-                value={orderQuery}
-                onChange={(event) => setOrderQuery(event.target.value)}
-                placeholder="Buscar pedido"
-                className="pl-9"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setOrdersFiltersOpen(true)}
-              className="relative inline-flex items-center gap-2 rounded-2xl border border-blush-200 glass px-4 text-sm font-semibold text-ink"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              Filtros
-              {activeOrderFilters > 0 ? (
-                <span className="rounded-full bg-blush-500 px-1.5 text-xs text-white">
-                  {activeOrderFilters}
-                </span>
-              ) : null}
-            </button>
-          </div>
-
-          <Modal
-            open={ordersFiltersOpen}
-            onOpenChange={setOrdersFiltersOpen}
-            title="Filtros de pedidos"
-            description="Elige qué pedidos quieres ver."
-          >
-            <div className="space-y-4">
-              <OrderFilterFields
-                stacked
-                status={orderStatus}
-                setStatus={setOrderStatus}
-                from={orderFrom}
-                setFrom={setOrderFrom}
-                to={orderTo}
-                setTo={setOrderTo}
-                sort={orderSort}
-                setSort={setOrderSort}
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={clearOrderFilters}
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Limpiar
-                </Button>
-                <Button
-                  type="button"
-                  className="flex-1"
-                  onClick={() => setOrdersFiltersOpen(false)}
-                >
-                  Aplicar
-                </Button>
-              </div>
-            </div>
-          </Modal>
-
-          <p className="text-xs text-ink-soft">
-            {filteredOrders.length} de {orders.length} pedidos
-          </p>
-
-          {filteredOrders.length === 0 ? (
-            <p className="rounded-4xl border border-dashed border-blush-200 glass px-6 py-12 text-center text-sm text-ink-soft">
-              No hay pedidos que coincidan con los filtros.
-            </p>
-          ) : (
-            <div className="grid gap-5 lg:grid-cols-2">
-              {filteredOrders.map(({ order, draft, email }) => (
-                <article
-                  key={order.id}
-                  className="flex min-w-0 gap-4 rounded-4xl border border-blush-100 glass p-4 shadow-sm"
-                >
-                  <a
-                    href={`/api/preview/${draft.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl border border-blush-100 glass-soft sm:h-36 sm:w-36"
-                  >
-                    {draft.previewImage || draft.previewPath ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={`/api/preview/${draft.id}`}
-                        alt={order.description || "Producto"}
-                        className="h-full w-full object-contain transition-transform hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <Package className="h-8 w-8 text-blush-300" />
-                      </div>
-                    )}
-                  </a>
-
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-ink">
-                          {order.name}
-                        </p>
-                        <p className="truncate text-xs text-ink-soft">{email}</p>
-                        {order.address ? (
-                          <p className="mt-0.5 break-words text-xs text-ink-soft">
-                            {order.address}
-                          </p>
-                        ) : null}
-                        {order.description ? (
-                          <p className="mt-1 line-clamp-2 text-xs text-ink-soft">
-                            {order.description}
-                          </p>
-                        ) : null}
-                        {draft.prompt ? (
-                          <p className="mt-0.5 line-clamp-1 text-xs text-ink-soft">
-                            Prompt: {draft.prompt}
-                          </p>
-                        ) : null}
-                        <p className="mt-0.5 text-xs text-ink-soft">
-                          Cantidad: {order.quantity ?? 1}
-                        </p>
-                      </div>
-                      <span className="shrink-0 whitespace-nowrap rounded-full bg-blush-100 px-3 py-1 text-xs font-semibold text-blush-700">
-                        {STATUS_LABEL[order.status] || order.status}
-                      </span>
-                    </div>
-
-                    <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-                      <Button
-                        size="md"
-                        variant="secondary"
-                        onClick={() => setChatOrderId(order.id)}
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                        Mensajes
-                      </Button>
-                      {order.modelPath ? (
-                        <a href={`/api/files/${draft.id}`} download>
-                          <Button size="md">
-                            <Download className="h-4 w-4" />
-                            Descargar GLB
-                          </Button>
-                        </a>
-                      ) : (
-                        <Button
-                          size="md"
-                          onClick={() => generateModel(order.id)}
-                          disabled={busy[order.id] === "generating"}
-                        >
-                          {busy[order.id] === "generating" ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Wand2 className="h-4 w-4" />
-                          )}
-                          Generar 3D
-                        </Button>
-                      )}
-
-                      <select
-                        value={order.status}
-                        onChange={(event) =>
-                          updateStatus(order.id, event.target.value)
-                        }
-                        className="rounded-full border border-blush-200 glass-soft px-3 py-2 text-xs font-semibold text-ink"
-                      >
-                        {ORDER_STATUS.map((status) => (
-                          <option key={status} value={status}>
-                            {STATUS_LABEL[status]}
-                          </option>
-                        ))}
-                      </select>
-
-                      {busy[order.id] === "status" ? (
-                        <RefreshCw className="h-4 w-4 animate-spin text-blush-400" />
-                      ) : null}
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+          <OrdersBoard orders={boardOrders} />
         </section>
       ) : null}
 
@@ -827,15 +557,6 @@ export function AdminDashboard({
         </section>
       ) : null}
 
-      <Modal
-        open={Boolean(chatOrderId)}
-        onOpenChange={(next) => (!next ? setChatOrderId(null) : null)}
-        title="Mensajes del pedido"
-        description="Conversación con el cliente."
-      >
-        {chatOrderId ? <OrderChat orderId={chatOrderId} /> : null}
-      </Modal>
-
       <CreditModal
         user={creditModal}
         onClose={() => setCreditModal(null)}
@@ -844,81 +565,6 @@ export function AdminDashboard({
           router.refresh();
         }}
       />
-    </div>
-  );
-}
-
-function OrderFilterFields({
-  stacked,
-  status,
-  setStatus,
-  from,
-  setFrom,
-  to,
-  setTo,
-  sort,
-  setSort,
-}) {
-  const selectClass = cn(
-    "rounded-2xl border border-blush-200 glass-soft px-3 py-3 text-sm font-semibold text-ink",
-    stacked && "w-full",
-  );
-
-  return (
-    <div className={stacked ? "space-y-4" : "flex flex-wrap items-end gap-3"}>
-      <div>
-        <label className="mb-1.5 block text-xs font-semibold text-ink">
-          Estado
-        </label>
-        <select
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-          className={selectClass}
-        >
-          <option value="all">Todos</option>
-          {ORDER_STATUS.map((statusOption) => (
-            <option key={statusOption} value={statusOption}>
-              {STATUS_LABEL[statusOption]}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-xs font-semibold text-ink">
-          Desde
-        </label>
-        <Input
-          type="date"
-          value={from}
-          onChange={(event) => setFrom(event.target.value)}
-        />
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-xs font-semibold text-ink">
-          Hasta
-        </label>
-        <Input
-          type="date"
-          value={to}
-          onChange={(event) => setTo(event.target.value)}
-        />
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-xs font-semibold text-ink">
-          Orden
-        </label>
-        <select
-          value={sort}
-          onChange={(event) => setSort(event.target.value)}
-          className={selectClass}
-        >
-          <option value="recent">Más recientes</option>
-          <option value="old">Más antiguos</option>
-        </select>
-      </div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   sendOrderConfirmationEmail,
 } from "@/lib/auth/mail";
 import { APP_NAME } from "@/lib/config";
+import { notifyAdmins } from "@/lib/notifications";
 
 const schema = z.object({
   draftId: z.string().uuid(),
@@ -92,6 +93,13 @@ export async function POST(request) {
       () => {},
     ),
   ]);
+
+  await notifyAdmins({
+    type: "new_order",
+    title: "Nuevo pedido",
+    body: `${parsed.data.name}: ${parsed.data.description || "Pieza impresa"}`,
+    link: "/admin",
+  }).catch(() => {});
 
   return NextResponse.json({ ok: true, orderId: order.id });
 }

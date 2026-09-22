@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { postComments, posts } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/guard";
 import { limitByKey } from "@/lib/security/rate-limit";
+import { notify } from "@/lib/notifications";
 
 const schema = z.object({
   body: z.string().trim().min(1, "Escribe un comentario").max(1000),
@@ -29,7 +30,7 @@ export async function POST(request, ctx) {
   const { id } = await ctx.params;
 
   const [post] = await db
-    .select({ id: posts.id })
+    .select({ id: posts.id, userId: posts.userId })
     .from(posts)
     .where(eq(posts.id, id))
     .limit(1);
@@ -42,6 +43,15 @@ export async function POST(request, ctx) {
     .insert(postComments)
     .values({ postId: id, userId: user.id, body: parsed.data.body })
     .returning({ id: postComments.id });
+
+  if (post.userId !== user.id) {
+    await notify(post.userId, {
+      type: "post_comment",
+      title: "Nuevo comentario en tu publicación",
+      body: `${user.fullName || "Alguien"}: ${parsed.data.body.slice(0, 100)}`,
+      link: `/blog#post-${id}`,
+    }).catch(() => {});
+  }
 
   return NextResponse.json({ ok: true, id: created.id });
 }
