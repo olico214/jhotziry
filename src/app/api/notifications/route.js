@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { notifications } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/guard";
@@ -11,19 +11,14 @@ export async function GET(request) {
   const rows = await db
     .select()
     .from(notifications)
-    .where(eq(notifications.userId, guard.user.id))
-    .orderBy(desc(notifications.createdAt))
-    .limit(30);
-
-  const [unreadRow] = await db
-    .select({ count: sql`count(*)` })
-    .from(notifications)
     .where(
       and(
         eq(notifications.userId, guard.user.id),
         isNull(notifications.readAt),
       ),
-    );
+    )
+    .orderBy(desc(notifications.createdAt))
+    .limit(50);
 
   return NextResponse.json({
     notifications: rows.map((row) => ({
@@ -32,9 +27,9 @@ export async function GET(request) {
       title: row.title,
       body: row.body,
       link: row.link,
-      read: Boolean(row.readAt),
+      read: false,
       createdAt: new Date(row.createdAt).toISOString(),
     })),
-    unread: Number(unreadRow?.count || 0),
+    unread: rows.length,
   });
 }

@@ -22,6 +22,7 @@ export function NotificationsBell() {
       return response.json();
     },
     refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   const notifications = query.data?.notifications ?? [];
