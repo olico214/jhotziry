@@ -293,6 +293,8 @@ export function ensureRunner() {
   if (globalThis.__jhoRunner) return;
 
   globalThis.__jhoRunner = setInterval(async () => {
+    if (globalThis.__jhoRunnerBusy) return;
+    globalThis.__jhoRunnerBusy = true;
     try {
       const rows = await db
         .select({ id: generationJobs.id })
@@ -303,14 +305,32 @@ export function ensureRunner() {
       for (const row of rows) {
         await advanceJob(row.id).catch(() => {});
       }
-
-      await processScheduledStatuses().catch(() => {});
     } catch (error) {
       console.error("[runner]", error.message);
+    } finally {
+      globalThis.__jhoRunnerBusy = false;
     }
   }, 5000);
 
   if (typeof globalThis.__jhoRunner.unref === "function") {
     globalThis.__jhoRunner.unref();
+  }
+
+  if (!globalThis.__jhoScheduleRunner) {
+    globalThis.__jhoScheduleRunner = setInterval(async () => {
+      if (globalThis.__jhoScheduleBusy) return;
+      globalThis.__jhoScheduleBusy = true;
+      try {
+        await processScheduledStatuses();
+      } catch (error) {
+        console.error("[schedules]", error.message);
+      } finally {
+        globalThis.__jhoScheduleBusy = false;
+      }
+    }, 15000);
+
+    if (typeof globalThis.__jhoScheduleRunner.unref === "function") {
+      globalThis.__jhoScheduleRunner.unref();
+    }
   }
 }

@@ -14,6 +14,7 @@ import {
   putObject,
 } from "@/lib/storage/object-store";
 import { getOrderStatusByKey } from "@/lib/orders/statuses";
+import { notifyOrderStatusChange } from "@/lib/orders/notify-status";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
@@ -167,6 +168,10 @@ export async function POST(request, ctx) {
       ? `El cliente subió la foto de recibido · Estado: ${nextDef.label}`
       : "El cliente subió la foto de recibido",
   });
+
+  await notifyOrderStatusChange(order.id, nextStatus, order.status).catch(
+    () => {},
+  );
 
   return NextResponse.json({ ok: true, status: nextStatus });
 }

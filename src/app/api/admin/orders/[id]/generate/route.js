@@ -6,6 +6,7 @@ import { drafts, generationJobs, orderEvents, orders } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/guard";
 import { getProvider } from "@/lib/ai/provider";
 import { ensureRunner } from "@/lib/jobs/runner";
+import { notifyOrderStatusChange } from "@/lib/orders/notify-status";
 import { readBuffer } from "@/lib/storage/files";
 import { bufferFromImageRecord } from "@/lib/storage/images";
 import { getObject, isObjectStoreConfigured } from "@/lib/storage/object-store";
@@ -186,6 +187,10 @@ export async function POST(request, ctx) {
         ? "Generando modelos 3D (texturizado y por partes)"
         : `Generando modelo ${plan[0].label}`,
   });
+
+  await notifyOrderStatusChange(order.id, "generating", order.status).catch(
+    () => {},
+  );
 
   return NextResponse.json({ ok: true, jobIds: started, failed });
 }

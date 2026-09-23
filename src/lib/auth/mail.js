@@ -211,8 +211,7 @@ export async function sendModelReadyEmail(email, url, appName) {
   }
 }
 
-export async function sendImageReadyEmail(email, url, appName) {
-  const transport = getTransporter();
+export async function sendImageReadyEmail(email, url, appName) {  const transport = getTransporter();
 
   const html = `
     <div style="font-family:Nunito,Arial,sans-serif;background:#fff5f9;padding:32px;border-radius:24px;color:#4a2b3b">
@@ -242,6 +241,44 @@ export async function sendImageReadyEmail(email, url, appName) {
     return { delivered: true };
   } catch (error) {
     console.error("[image-ready] Error al enviar aviso:", error.message);
+    return { delivered: false, error: error.message };
+  }
+}
+
+export async function sendStatusUpdateEmail(email, { label, description, url }, appName) {
+  const transport = getTransporter();
+
+  const html = `
+    <div style="font-family:Nunito,Arial,sans-serif;background:#fff5f9;padding:32px;border-radius:24px;color:#4a2b3b">
+      <h1 style="color:#e34d8b;margin:0 0 8px">${appName}</h1>
+      <p>Tu pedido cambió de estado.</p>
+      <p style="font-size:18px;font-weight:bold;color:#e34d8b;margin:8px 0 16px">
+        ${label}
+      </p>
+      ${description ? `<p style="font-size:13px;color:#8a6478">Pedido: ${description}</p>` : ""}
+      <p style="margin:24px 0">
+        <a href="${url}" style="background:#f96ba4;color:#fff;padding:12px 24px;border-radius:9999px;text-decoration:none;display:inline-block">
+          Ver mi pedido
+        </a>
+      </p>
+    </div>
+  `;
+
+  if (!transport) {
+    console.info(`[estado-pedido] SMTP no configurado. Aviso para ${email}: ${label}`);
+    return { delivered: false };
+  }
+
+  try {
+    await transport.sendMail({
+      from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      to: email,
+      subject: `Tu pedido: ${label} · ${appName}`,
+      html,
+    });
+    return { delivered: true };
+  } catch (error) {
+    console.error("[estado-pedido] Error al enviar aviso:", error.message);
     return { delivered: false, error: error.message };
   }
 }
