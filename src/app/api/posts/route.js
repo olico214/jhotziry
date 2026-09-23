@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -8,6 +9,11 @@ import { notifyAdmins } from "@/lib/notifications";
 import { listPosts } from "@/lib/posts/queries";
 import { extensionFor } from "@/lib/storage/files";
 import { imageRecordFromBuffer, mimeFromExtension } from "@/lib/storage/images";
+import {
+  isObjectStoreConfigured,
+  postImageKey,
+  putObject,
+} from "@/lib/storage/object-store";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
@@ -50,7 +56,10 @@ export async function POST(request) {
   const tags = parseTags(form.get("tags"));
   const file = form.get("image");
 
-  let image = null;
+  let imageBuffer = null;
+  let imageExtension = null;
+  let imageMime = null;
+
   if (file instanceof File && file.size > 0) {
     if (!file.type.startsWith("image/")) {
       return NextResponse.json(
@@ -71,13 +80,12 @@ export async function POST(request) {
         { status: 415 },
       );
     }
-    image = imageRecordFromBuffer(
-      Buffer.from(await file.arrayBuffer()),
-      mimeFromExtension(extension),
-    );
+    imageBuffer = Buffer.from(await file.arrayBuffer());
+    imageExtension = extension;
+    imageMime = mimeFromExtension(extension);
   }
 
-  if (!image && !title && !body && tags.length === 0) {
+  if (!imageBuffer && !title && !body && tags.length === 0) {
     return NextResponse.json(
       { error: "Agrega una imagen, escribe algo o pon una etiqueta." },
       { status: 400 },
@@ -91,9 +99,31 @@ export async function POST(request) {
       title: title || null,
       body: body || null,
       tags: tags.length ? tags : null,
-      image,
+      image: null,
     })
     .returning({ id: posts.id });
+
+  if (imageBuffer) {
+    let storedKey = null;
+    if (isObjectStoreConfigured()) {
+      try {
+        storedKey = postImageKey(created.id, imageExtension);
+        await putObject(storedKey, imageBuffer, imageMime);
+      } catch (error) {
+        console.error("[storage] post image upload:", error.message);
+        storedKey = null;
+      }
+    }
+
+    await db
+      .update(posts)
+      .set(
+        storedKey
+          ? { imageKey: storedKey }
+          : { image: imageRecordFromBuffer(imageBuffer, imageMime) },
+      )
+      .where(eq(posts.id, created.id));
+  }
 
   await notifyAdmins({
     type: "new_post",

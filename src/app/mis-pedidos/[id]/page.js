@@ -72,7 +72,7 @@ export default async function OrderDetailPage({ params }) {
   const canEditModel = user.isAdmin || clientCanEditModel;
 
   const previewUrl =
-    draft && (draft.previewImage || draft.previewPath)
+    draft && (draft.previewImage || draft.previewImageKey || draft.previewPath)
       ? `/api/preview/${draft.id}?v=${new Date(draft.updatedAt).getTime()}`
       : null;
 

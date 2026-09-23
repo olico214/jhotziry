@@ -49,7 +49,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Diseño no encontrado" }, { status: 404 });
   }
 
-  if (!draft.previewImage && !draft.previewPath) {
+  if (!draft.previewImage && !draft.previewImageKey && !draft.previewPath) {
     return NextResponse.json(
       { error: "Primero genera una vista previa" },
       { status: 400 },

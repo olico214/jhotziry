@@ -96,6 +96,7 @@ export async function POST(request) {
       aiSummary: enhanced?.summary ?? null,
       previewPath: null,
       previewImage: null,
+      previewImageKey: null,
       modelPath: null,
       status: "generating",
       updatedAt: new Date(),

@@ -54,6 +54,7 @@ Copiar `.env.example` a `.env.local` (gitignored). Claves:
 - IA: `AI_PROVIDER` (`tripo` | `mock`), `AI_ENHANCE`; `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`; `TRIPO_API_KEY`, `TRIPO_BASE_URL`, `TRIPO_MODEL`, `TRIPO_FACE_LIMIT`, `TRIPO_TEXTURE`, `TRIPO_PBR`, `TRIPO_IMAGE_MODEL`, `TRIPO_IMAGE_SIZE`.
 - Créditos: `WELCOME_CREDITS`, `CREDITS_PER_PREVIEW`, `NEXT_PUBLIC_CREDITS_PER_PREVIEW`, `CREDITS_PER_IDEA`, `NEXT_PUBLIC_CREDITS_PER_IDEA`.
 - Acceso: `ADMIN_EMAILS` (correos que se vuelven admin al entrar), `STORAGE_DIR` (por defecto `./.data`).
+- Imágenes en **MinIO/S3** (opcional, recomendado): `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_PUBLIC_BASE_URL`. Sin estas variables las imágenes se guardan como base64 en Postgres (compatibilidad).
 
 ## Arquitectura
 ```
@@ -73,7 +74,7 @@ src/lib/
   db/                    client.js, schema.js, drafts.js, migrations/
   posts/                 queries.js
   security/              rate-limit.js
-  storage/               files.js (disco/GLE), images.js (jsonb base64)
+  storage/               files.js (disco/GLB), images.js (helpers mime/base64), object-store.js (MinIO/S3)
   jobs/                  runner.js (avanza trabajos en segundo plano)
   store/                 draft-store.js (zustand + persist)
   api-client.js          apiFetch (añade x-csrf-token)
@@ -110,7 +111,7 @@ Solo admin: `admin/credits`, `admin/invitations`, `admin/access-requests/[id]/in
 - Nunca exponer claves con `NEXT_PUBLIC_`; las de IA/DB son solo de servidor.
 
 ## Almacenamiento
-- **Imágenes** (foto origen y preview) en Postgres como `jsonb` `{ mime, data: base64 }`. No dependen del filesystem.
+- **Imágenes** (foto origen, preview y blog) en **MinIO/S3** cuando está configurado (`src/lib/storage/object-store.js`): claves `drafts/<id>/source.<ext>`, `drafts/<id>/preview.<ext>`, `posts/<id>/image.<ext>` guardadas en `drafts.source_image_key`/`preview_image_key` y `posts.image_key`. El blog es **público** (política del bucket solo en `posts/*`; se sirve directo por `S3_PUBLIC_BASE_URL`), mientras que las previews son **privadas** (proxy con control de acceso en `GET /api/preview/[id]`). Si no hay S3 configurado o falta la clave, se usa el **base64 en Postgres** como fallback (los jsonb `source_image`/`preview_image`/`image` se conservan).
 - **`.glb`** en disco bajo `STORAGE_DIR` (`./.data`): modelos de Tripo (`models/<draftId>/model*.glb`), el coloreado guardado (`order-<orderId>-color.glb`) y el editado (`order-<orderId>-edited.glb`). Se sirven a dueño/admin según el tipo.
 
 ## Convenciones
@@ -127,7 +128,7 @@ Solo admin: `admin/credits`, `admin/invitations`, `admin/access-requests/[id]/in
 Requisitos: **Node.js ≥ 20.9**, Postgres ≥ 14, SMTP, claves de DeepSeek/Tripo.
 
 1. **Base de datos**: crear la BD Postgres y obtener `DATABASE_URL`.
-2. **Variables**: crear `.env.local` (o variables del servicio) con `DATABASE_URL`, `AUTH_SECRET` fuerte, `APP_URL` (URL pública con HTTPS), SMTP, claves de IA, `ADMIN_EMAILS`, `AI_PROVIDER=tripo`, `STORAGE_DIR` a una ruta persistente.
+2. **Variables**: crear `.env.local` (o variables del servicio) con `DATABASE_URL`, `AUTH_SECRET` fuerte, `APP_URL` (URL pública con HTTPS), SMTP, claves de IA, `ADMIN_EMAILS`, `AI_PROVIDER=tripo`, `STORAGE_DIR` a una ruta persistente y, recomendado, las `S3_*` de MinIO.
 3. **Instalar y migrar**:
    ```
    npm ci
@@ -150,7 +151,7 @@ Requisitos: **Node.js ≥ 20.9**, Postgres ≥ 14, SMTP, claves de DeepSeek/Trip
    ```
    (o `pm2 start npm --name jhotziry -- run start`).
 5. **Reverse proxy (nginx)** con HTTPS y **reenviar `x-forwarded-for`** (el rate limit y los logs dependen de la IP real). No exponer el puerto de Next directamente.
-6. **Almacenamiento**: montar `STORAGE_DIR` en un volumen persistente (ahí van los `.glb`). Las imágenes ya viven en Postgres.
+6. **Almacenamiento**: montar `STORAGE_DIR` en un volumen persistente (ahí van los `.glb`). Las imágenes van a **MinIO/S3** (bucket privado + política pública solo en `posts/*`); sin `S3_*` quedan en Postgres como base64.
 7. **Admin**: `npm run admin:grant -- correo@dominio.com` (el usuario debe existir tras iniciar sesión una vez) o agregarlo a `ADMIN_EMAILS`.
 8. **Escalado**: el rate limit es **en memoria**. Con una sola instancia basta; si se escala horizontalmente, migrar el limiter a Redis/Upstash sin cambiar las rutas.
 9. **Endurecer CSP**: revisar los reportes `Content-Security-Policy-Report-Only` y luego quitar `-Report-Only`.

@@ -13,6 +13,7 @@
     "admin:grant": "node tools/grant-admin.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1138.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-tabs": "^1.1.21",
     "@react-three/drei": "^10.7.8",

@@ -15,6 +15,11 @@ import {
   imageRecordFromBuffer,
   mimeFromExtension,
 } from "@/lib/storage/images";
+import {
+  draftSourceKey,
+  isObjectStoreConfigured,
+  putObject,
+} from "@/lib/storage/object-store";
 
 const CREDITS_PER_PREVIEW = Number(process.env.CREDITS_PER_PREVIEW || 5);
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -112,6 +117,19 @@ export async function POST(request) {
     }
   }
 
+  let sourceImage = imageRecordFromBuffer(buffer, mime);
+  let sourceImageKey = null;
+  if (isObjectStoreConfigured()) {
+    try {
+      sourceImageKey = draftSourceKey(draft.id, extension);
+      await putObject(sourceImageKey, buffer, mime);
+      sourceImage = null;
+    } catch (error) {
+      console.error("[storage] source upload:", error.message);
+      sourceImageKey = null;
+    }
+  }
+
   await db
     .update(drafts)
     .set({
@@ -120,9 +138,11 @@ export async function POST(request) {
       prompt: userPrompt || null,
       enhancedPrompt: userPrompt ? extraPrompt : null,
       aiSummary: summary,
-      sourceImage: imageRecordFromBuffer(buffer, mime),
+      sourceImage,
+      sourceImageKey,
       sourceImagePath: null,
       previewImage: null,
+      previewImageKey: null,
       previewPath: null,
       modelPath: null,
       status: "generating",

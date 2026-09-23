@@ -394,7 +394,7 @@ export function AdminDashboard({
                     {post.hasImage ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`/api/posts/${post.id}/image`}
+                        src={post.imageUrl || `/api/posts/${post.id}/image`}
                         alt={post.title || "Publicación"}
                         loading="lazy"
                         decoding="async"

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { canAccessDraft } from "@/lib/db/drafts";
 import { contentTypeFor, readBuffer } from "@/lib/storage/files";
 import { bufferFromImageRecord } from "@/lib/storage/images";
+import { getObject, isObjectStoreConfigured } from "@/lib/storage/object-store";
 
 export async function GET(_request, ctx) {
   const { id } = await ctx.params;
@@ -21,12 +22,31 @@ export async function GET(_request, ctx) {
     .where(eq(drafts.id, id))
     .limit(1);
 
-  if (!draft?.previewImage && !draft?.previewPath) {
+  if (
+    !draft?.previewImage &&
+    !draft?.previewImageKey &&
+    !draft?.previewPath
+  ) {
     return new Response("Vista previa no encontrada", { status: 404 });
   }
 
   if (!canAccessDraft(draft, user)) {
     return new Response("No autorizado", { status: 403 });
+  }
+
+  if (draft.previewImageKey && isObjectStoreConfigured()) {
+    try {
+      const { buffer, contentType } = await getObject(draft.previewImageKey);
+      return new Response(buffer, {
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": String(buffer.length),
+          "Cache-Control": "no-store",
+        },
+      });
+    } catch (error) {
+      console.error("[storage] preview fetch:", error.message);
+    }
   }
 
   if (draft.previewImage) {

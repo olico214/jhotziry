@@ -14,6 +14,11 @@ import {
   imageRecordFromBuffer,
   mimeFromExtension,
 } from "@/lib/storage/images";
+import {
+  draftPreviewKey,
+  isObjectStoreConfigured,
+  putObject,
+} from "@/lib/storage/object-store";
 import { sendImageReadyEmail, sendModelReadyEmail } from "@/lib/auth/mail";
 import { notify } from "@/lib/notifications";
 import { APP_NAME } from "@/lib/config";
@@ -139,10 +144,26 @@ export async function advanceJob(jobId) {
     const draftPatch = { updatedAt: new Date() };
 
     if (step.previewBuffer) {
-      draftPatch.previewImage = imageRecordFromBuffer(
-        step.previewBuffer,
-        mimeFromExtension(step.previewExtension || "png"),
-      );
+      const mime = mimeFromExtension(step.previewExtension || "png");
+      if (isObjectStoreConfigured()) {
+        try {
+          const key = draftPreviewKey(draft.id, step.previewExtension || "png");
+          await putObject(key, step.previewBuffer, mime);
+          draftPatch.previewImageKey = key;
+          draftPatch.previewImage = null;
+        } catch (error) {
+          console.error("[storage] preview upload:", error.message);
+          draftPatch.previewImage = imageRecordFromBuffer(
+            step.previewBuffer,
+            mime,
+          );
+        }
+      } else {
+        draftPatch.previewImage = imageRecordFromBuffer(
+          step.previewBuffer,
+          mime,
+        );
+      }
       draftPatch.previewPath = null;
       draftPatch.status = "ready";
     }

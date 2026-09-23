@@ -94,6 +94,8 @@ export const drafts = pgTable(
     previewPath: text("preview_path"),
     sourceImage: jsonb("source_image"),
     previewImage: jsonb("preview_image"),
+    sourceImageKey: text("source_image_key"),
+    previewImageKey: text("preview_image_key"),
     modelPath: text("model_path"),
     modelPartsPath: text("model_parts_path"),
     status: text("status").notNull().default("empty"),
@@ -250,6 +252,7 @@ export const posts = pgTable(
     body: text("body"),
     tags: jsonb("tags"),
     image: jsonb("image"),
+    imageKey: text("image_key"),
     status: text("status").notNull().default("published"),
     featured: boolean("featured").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })

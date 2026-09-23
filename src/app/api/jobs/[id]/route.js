@@ -14,7 +14,7 @@ function serialize(job, draft, isAdmin) {
     status: job.status,
     progress: job.progress,
     previewUrl:
-      draft?.previewImage || draft?.previewPath
+      draft?.previewImage || draft?.previewImageKey || draft?.previewPath
         ? `/api/preview/${draft.id}?v=${version}`
         : null,
     modelUrl:

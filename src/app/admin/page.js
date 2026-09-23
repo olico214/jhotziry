@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getOrderStatuses } from "@/lib/orders/statuses";
+import { buildPublicUrl } from "@/lib/storage/object-store";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 
 export const metadata = {
@@ -61,6 +62,7 @@ export default async function AdminPage() {
         body: posts.body,
         tags: posts.tags,
         image: posts.image,
+        imageKey: posts.imageKey,
         featured: posts.featured,
         status: posts.status,
         createdAt: posts.createdAt,
@@ -91,7 +93,8 @@ export default async function AdminPage() {
     featured: post.featured,
     status: post.status,
     author: post.author || post.authorEmail,
-    hasImage: Boolean(post.image),
+    hasImage: Boolean(post.imageKey || post.image),
+    imageUrl: post.imageKey ? buildPublicUrl(post.imageKey) : null,
     likeCount: Number(post.likeCount),
     commentCount: Number(post.commentCount),
     createdAt: new Date(post.createdAt).toISOString(),

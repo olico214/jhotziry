@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { postComments, posts, users } from "@/lib/db/schema";
+import { buildPublicUrl } from "@/lib/storage/object-store";
 
 export async function listPosts({
   featuredOnly = false,
@@ -32,6 +33,7 @@ export async function listPosts({
       body: posts.body,
       tags: posts.tags,
       image: posts.image,
+      imageKey: posts.imageKey,
       featured: posts.featured,
       status: posts.status,
       createdAt: posts.createdAt,
@@ -46,16 +48,25 @@ export async function listPosts({
     .orderBy(desc(posts.createdAt))
     .limit(limit);
 
-  return rows.map((row) => ({
-    ...row,
-    hasImage: Boolean(row.image),
-    image: undefined,
-    tags: Array.isArray(row.tags) ? row.tags : [],
-    likeCount: Number(row.likeCount),
-    commentCount: Number(row.commentCount),
-    liked: Boolean(row.liked),
-    createdAt: new Date(row.createdAt).toISOString(),
-  }));
+  return rows.map((row) => {
+    const hasImage = Boolean(row.imageKey || row.image);
+    return {
+      ...row,
+      hasImage,
+      imageUrl: row.imageKey
+        ? buildPublicUrl(row.imageKey)
+        : hasImage
+          ? `/api/posts/${row.id}/image`
+          : null,
+      image: undefined,
+      imageKey: undefined,
+      tags: Array.isArray(row.tags) ? row.tags : [],
+      likeCount: Number(row.likeCount),
+      commentCount: Number(row.commentCount),
+      liked: Boolean(row.liked),
+      createdAt: new Date(row.createdAt).toISOString(),
+    };
+  });
 }
 
 export async function listComments(postIds) {

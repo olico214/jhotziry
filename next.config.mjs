@@ -10,9 +10,25 @@ const baseHeaders = [
   { key: "X-DNS-Prefetch-Control", value: "off" },
 ];
 
+const mediaOrigins = [
+  process.env.S3_PUBLIC_BASE_URL,
+  process.env.S3_ENDPOINT,
+]
+  .filter(Boolean)
+  .map((value) => {
+    try {
+      return new URL(value).origin;
+    } catch {
+      return null;
+    }
+  })
+  .filter(Boolean);
+
+const imgSrc = ["'self'", "data:", "blob:", ...new Set(mediaOrigins)].join(" ");
+
 const csp = [
   "default-src 'self'",
-  "img-src 'self' data: blob:",
+  `img-src ${imgSrc}`,
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "font-src 'self' data:",

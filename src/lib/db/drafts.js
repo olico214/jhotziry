@@ -27,8 +27,10 @@ export async function resolveUserDraft(userId, draftId) {
     const used =
       draft &&
       (draft.previewImage ||
+        draft.previewImageKey ||
         draft.previewPath ||
         draft.sourceImage ||
+        draft.sourceImageKey ||
         draft.sourceImagePath ||
         draft.modelPath);
 

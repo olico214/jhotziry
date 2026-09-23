@@ -8,6 +8,7 @@ import { getProvider } from "@/lib/ai/provider";
 import { ensureRunner } from "@/lib/jobs/runner";
 import { readBuffer } from "@/lib/storage/files";
 import { bufferFromImageRecord } from "@/lib/storage/images";
+import { getObject, isObjectStoreConfigured } from "@/lib/storage/object-store";
 
 const PLANS = {
   textured: [{ type: "model", parts: false, label: "texturizado" }],
@@ -19,6 +20,19 @@ const PLANS = {
 };
 
 async function resolveImage(draft) {
+  const key = draft?.previewImageKey || draft?.sourceImageKey;
+  if (key && isObjectStoreConfigured()) {
+    try {
+      const { buffer, contentType } = await getObject(key);
+      const extension =
+        path.extname(key).slice(1) ||
+        (contentType.split("/")[1] || "png");
+      return { buffer, extension };
+    } catch (error) {
+      console.error("[storage] model source fetch:", error.message);
+    }
+  }
+
   const record = draft?.previewImage || draft?.sourceImage;
   if (record) {
     return {
