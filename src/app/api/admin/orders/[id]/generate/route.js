@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import path from "node:path";
 import { db } from "@/lib/db/client";
 import { drafts, generationJobs, orderEvents, orders } from "@/lib/db/schema";
@@ -89,9 +89,27 @@ export async function POST(request, ctx) {
     );
   }
 
+  const [activeJob] = await db
+    .select({ id: generationJobs.id })
+    .from(generationJobs)
+    .where(
+      and(
+        eq(generationJobs.draftId, order.draftId),
+        inArray(generationJobs.type, ["model", "model_parts"]),
+        inArray(generationJobs.status, ["queued", "processing"]),
+      ),
+    )
+    .limit(1);
+
+  if (activeJob) {
+    return NextResponse.json(
+      { error: "Ya hay una generación de modelo en curso para este pedido." },
+      { status: 409 },
+    );
+  }
+
   const provider = getProvider();
   ensureRunner();
-
   const started = [];
   const failed = [];
 

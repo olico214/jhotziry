@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Boxes, Download, Loader2, RefreshCw, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { apiFetch } from "@/lib/api-client";
 import { TRIPO_COST_MODEL, TRIPO_COST_PARTS } from "@/lib/config";
+import { cn } from "@/lib/utils";
 
 const FALLBACK_STATUSES = [
   { value: "new", label: "Nuevo" },
@@ -43,6 +44,7 @@ export function AdminOrderActions({
       : FALLBACK_STATUSES;
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const busyRef = useRef(false);
   const [mode, setMode] = useState(
     hasModel && !hasParts ? "parts" : "textured",
   );
@@ -65,6 +67,8 @@ export function AdminOrderActions({
   };
 
   const generate = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setGenerating(true);
     try {
       const response = await apiFetch(`/api/admin/orders/${orderId}/generate`, {
@@ -79,6 +83,7 @@ export function AdminOrderActions({
         router.refresh();
       }
     } finally {
+      busyRef.current = false;
       setGenerating(false);
     }
   };
@@ -105,8 +110,12 @@ export function AdminOrderActions({
       </span>
 
       {hasModel ? (
-        <a href={`/api/files/${draftId}`} download={`modelo-${draftId}.glb`}>
-          <Button size="md">
+        <a
+          href={`/api/files/${draftId}`}
+          download={`modelo-${draftId}.glb`}
+          className={cn(generating && "pointer-events-none opacity-60")}
+        >
+          <Button size="md" disabled={generating}>
             <Download className="h-4 w-4" />
             Descargar GLB
           </Button>
@@ -117,8 +126,9 @@ export function AdminOrderActions({
         <a
           href={`/api/files/${draftId}?kind=parts`}
           download={`partes-${draftId}.glb`}
+          className={cn(generating && "pointer-events-none opacity-60")}
         >
-          <Button size="md" variant="secondary">
+          <Button size="md" variant="secondary" disabled={generating}>
             <Boxes className="h-4 w-4" />
             Descargar partes
           </Button>
@@ -144,7 +154,7 @@ export function AdminOrderActions({
         ) : (
           <Wand2 className="h-4 w-4" />
         )}
-        Generar 3D
+        {generating ? "Generando…" : "Generar 3D"}
       </Button>
 
       <span className="rounded-full bg-blush-100 px-3 py-1 text-xs font-semibold text-blush-700">
@@ -153,8 +163,9 @@ export function AdminOrderActions({
 
       <select
         value={status}
+        disabled={generating}
         onChange={(event) => changeStatus(event.target.value)}
-        className="rounded-full border border-blush-200 glass px-3 py-2 text-xs font-semibold text-ink"
+        className="rounded-full border border-blush-200 glass px-3 py-2 text-xs font-semibold text-ink disabled:opacity-60"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

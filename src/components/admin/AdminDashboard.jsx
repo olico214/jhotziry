@@ -77,7 +77,7 @@ export function AdminDashboard({
         createdAt: new Date(order.createdAt).toISOString(),
         draftId: draft.id,
         previewUrl:
-          draft.previewImage || draft.previewPath
+          draft.previewImage || draft.previewImageKey || draft.previewPath
             ? `/api/preview/${draft.id}?v=${new Date(draft.updatedAt).getTime()}`
             : null,
       })),
