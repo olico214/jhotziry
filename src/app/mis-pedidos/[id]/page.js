@@ -99,6 +99,12 @@ export default async function OrderDetailPage({ params }) {
             hasModel={Boolean(order.modelPath)}
             hasParts={Boolean(order.modelPartsPath)}
             statuses={statuses.filter((item) => item.active)}
+            scheduledStatus={order.scheduledStatus}
+            scheduledStatusAt={
+              order.scheduledStatusAt
+                ? new Date(order.scheduledStatusAt).toISOString()
+                : null
+            }
           />
         </div>
       ) : null}

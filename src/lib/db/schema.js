@@ -161,6 +161,8 @@ export const orders = pgTable(
     editedModelPath: text("edited_model_path"),
     clientPhotoKey: text("client_photo_key"),
     clientPhoto: jsonb("client_photo"),
+    scheduledStatus: text("scheduled_status"),
+    scheduledStatusAt: timestamp("scheduled_status_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -171,6 +173,7 @@ export const orders = pgTable(
   (table) => [
     index("orders_user_id_idx").on(table.userId),
     index("orders_draft_id_idx").on(table.draftId),
+    index("orders_scheduled_status_at_idx").on(table.scheduledStatusAt),
   ],
 );
 

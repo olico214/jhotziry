@@ -21,6 +21,7 @@ import {
 } from "@/lib/storage/object-store";
 import { sendImageReadyEmail, sendModelReadyEmail } from "@/lib/auth/mail";
 import { notify } from "@/lib/notifications";
+import { processScheduledStatuses } from "@/lib/orders/schedules";
 import { APP_NAME } from "@/lib/config";
 
 const inFlight = (globalThis.__jhoInFlight ??= new Set());
@@ -302,6 +303,8 @@ export function ensureRunner() {
       for (const row of rows) {
         await advanceJob(row.id).catch(() => {});
       }
+
+      await processScheduledStatuses().catch(() => {});
     } catch (error) {
       console.error("[runner]", error.message);
     }
