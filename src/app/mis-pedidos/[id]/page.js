@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { OrderChat } from "@/components/orders/OrderChat";
 import { AdminOrderActions } from "@/components/admin/AdminOrderActions";
 import { Model3DViewer } from "@/components/orders/Model3DViewer";
+import { OrderClientPhoto } from "@/components/orders/OrderClientPhoto";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -70,6 +71,10 @@ export default async function OrderDetailPage({ params }) {
   const statusDef = statuses.find((item) => item.key === order.status);
   const clientCanEditModel = Boolean(statusDef?.clientCanEditModel);
   const canEditModel = user.isAdmin || clientCanEditModel;
+  const clientPhotoUrl =
+    order.clientPhoto || order.clientPhotoKey
+      ? `/api/orders/${order.id}/photo?v=${new Date(order.updatedAt).getTime()}`
+      : null;
 
   const previewUrl =
     draft && (draft.previewImage || draft.previewImageKey || draft.previewPath)
@@ -126,6 +131,14 @@ export default async function OrderDetailPage({ params }) {
               : "Vista en 3D. En este estado ya no se pueden cambiar los colores; puedes girar y hacer zoom, pero la descarga la gestiona el equipo."}
           </p>
         </section>
+      ) : null}
+
+      {order.clientPhoto || order.clientPhotoKey || statusDef?.clientUploadsPhoto ? (
+        <OrderClientPhoto
+          orderId={order.id}
+          canUpload={Boolean(statusDef?.clientUploadsPhoto)}
+          photoUrl={clientPhotoUrl}
+        />
       ) : null}
 
       <div className="mt-4 grid gap-6 sm:grid-cols-[240px_1fr]">

@@ -13,6 +13,8 @@ const updateSchema = z.object({
   description: z.string().trim().max(200).nullable().optional(),
   sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
   clientCanEditModel: z.boolean().optional(),
+  clientUploadsPhoto: z.boolean().optional(),
+  clientPhotoNextStatus: z.string().trim().max(40).nullable().optional(),
   active: z.boolean().optional(),
 });
 

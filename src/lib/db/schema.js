@@ -159,6 +159,8 @@ export const orders = pgTable(
     partColors: jsonb("part_colors"),
     colorModelPath: text("color_model_path"),
     editedModelPath: text("edited_model_path"),
+    clientPhotoKey: text("client_photo_key"),
+    clientPhoto: jsonb("client_photo"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -346,6 +348,8 @@ export const orderStatuses = pgTable("order_statuses", {
   description: text("description"),
   sortOrder: integer("sort_order").notNull().default(0),
   clientCanEditModel: boolean("client_can_edit_model").notNull().default(false),
+  clientUploadsPhoto: boolean("client_uploads_photo").notNull().default(false),
+  clientPhotoNextStatus: text("client_photo_next_status"),
   active: boolean("active").notNull().default(true),
   isSystem: boolean("is_system").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })

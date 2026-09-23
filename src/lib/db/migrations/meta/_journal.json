@@ -134,6 +134,13 @@
       "when": 1790175184048,
       "tag": "0018_complete_talon",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790176305611,
+      "tag": "0019_daily_hitman",
+      "breakpoints": true
     }
   ]
 }

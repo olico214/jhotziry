@@ -2,17 +2,33 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { GripVertical, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
-function StatusRow({ status, onChanged }) {
+function StatusRow({
+  status,
+  statuses,
+  onChanged,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  isDragging,
+  isOver,
+}) {
   const [label, setLabel] = useState(status.label);
-  const [sortOrder, setSortOrder] = useState(status.sortOrder);
+  const [dragArmed, setDragArmed] = useState(false);
   const [clientCanEditModel, setClientCanEditModel] = useState(
     status.clientCanEditModel,
+  );
+  const [clientUploadsPhoto, setClientUploadsPhoto] = useState(
+    status.clientUploadsPhoto,
+  );
+  const [clientPhotoNextStatus, setClientPhotoNextStatus] = useState(
+    status.clientPhotoNextStatus || "",
   );
   const [active, setActive] = useState(status.active);
   const [saving, setSaving] = useState(false);
@@ -21,8 +37,9 @@ function StatusRow({ status, onChanged }) {
 
   const dirty =
     label.trim() !== status.label ||
-    Number(sortOrder) !== status.sortOrder ||
     clientCanEditModel !== status.clientCanEditModel ||
+    clientUploadsPhoto !== status.clientUploadsPhoto ||
+    (clientPhotoNextStatus || null) !== (status.clientPhotoNextStatus || null) ||
     active !== status.active;
 
   const save = async () => {
@@ -34,8 +51,9 @@ function StatusRow({ status, onChanged }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           label: label.trim(),
-          sortOrder: Number(sortOrder),
           clientCanEditModel,
+          clientUploadsPhoto,
+          clientPhotoNextStatus: clientPhotoNextStatus || null,
           active,
         }),
       });
@@ -68,7 +86,32 @@ function StatusRow({ status, onChanged }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-blush-100 px-4 py-3 last:border-b-0">
+    <div
+      draggable={dragArmed}
+      onDragStart={onDragStart}
+      onDragEnd={() => {
+        setDragArmed(false);
+        onDragEnd?.();
+      }}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={cn(
+        "flex flex-wrap items-center gap-3 border-b border-blush-100 px-4 py-3 transition-colors last:border-b-0",
+        isDragging && "opacity-50",
+        isOver && "bg-blush-50",
+      )}
+    >
+      <span
+        onMouseDown={() => setDragArmed(true)}
+        onMouseUp={() => setDragArmed(false)}
+        onTouchStart={() => setDragArmed(true)}
+        onTouchEnd={() => setDragArmed(false)}
+        title="Arrastra para ordenar"
+        className="cursor-grab touch-none text-ink-soft active:cursor-grabbing"
+      >
+        <GripVertical className="h-5 w-5" />
+      </span>
+
       <Input
         value={label}
         onChange={(event) => setLabel(event.target.value)}
@@ -79,18 +122,6 @@ function StatusRow({ status, onChanged }) {
         {status.key}
         {status.isSystem ? " · sistema" : ""}
       </code>
-
-      <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft">
-        Orden
-        <input
-          type="number"
-          min="0"
-          max="9999"
-          value={sortOrder}
-          onChange={(event) => setSortOrder(event.target.value)}
-          className="w-16 rounded-xl border border-blush-200 glass px-2 py-1 text-xs text-ink"
-        />
-      </label>
 
       <label
         className="inline-flex items-center gap-2 text-xs font-semibold text-ink-soft"
@@ -104,6 +135,39 @@ function StatusRow({ status, onChanged }) {
         />
         Cliente puede pintar el 3D
       </label>
+
+      <label
+        className="inline-flex items-center gap-2 text-xs font-semibold text-ink-soft"
+        title="Si lo marcas, el cliente puede subir una foto en este estado; al subirla el pedido pasa al estado siguiente"
+      >
+        <input
+          type="checkbox"
+          checked={clientUploadsPhoto}
+          onChange={(event) => setClientUploadsPhoto(event.target.checked)}
+          className="h-4 w-4 accent-blush-500"
+        />
+        Cliente sube foto
+      </label>
+
+      {clientUploadsPhoto ? (
+        <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft">
+          Pasa a
+          <select
+            value={clientPhotoNextStatus}
+            onChange={(event) => setClientPhotoNextStatus(event.target.value)}
+            className="rounded-xl border border-blush-200 glass px-2 py-1 text-xs font-semibold text-ink"
+          >
+            <option value="">— Ninguno —</option>
+            {statuses
+              .filter((item) => item.key !== status.key)
+              .map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.label}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
 
       <label className="inline-flex items-center gap-2 text-xs font-semibold text-ink-soft">
         <input
@@ -158,12 +222,67 @@ function StatusRow({ status, onChanged }) {
 
 export function StatusManager({ statuses = [] }) {
   const router = useRouter();
+  const signature = JSON.stringify(
+    statuses.map((status) => [
+      status.id,
+      status.label,
+      status.sortOrder,
+      status.active,
+      status.clientCanEditModel,
+      status.clientUploadsPhoto,
+      status.clientPhotoNextStatus,
+    ]),
+  );
+  const [items, setItems] = useState(statuses);
+  const [localSignature, setLocalSignature] = useState(signature);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [overIndex, setOverIndex] = useState(null);
+  const [reordering, setReordering] = useState(false);
   const [label, setLabel] = useState("");
   const [clientCanEditModel, setClientCanEditModel] = useState(false);
+  const [clientUploadsPhoto, setClientUploadsPhoto] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
 
+  if (localSignature !== signature) {
+    setLocalSignature(signature);
+    setItems(statuses);
+  }
+
   const refresh = () => router.refresh();
+
+  const persistOrder = async (next) => {
+    setReordering(true);
+    try {
+      const response = await apiFetch("/api/admin/order-statuses/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: next.map((item) => item.id) }),
+      });
+      if (!response.ok) {
+        setItems(statuses);
+        return;
+      }
+      refresh();
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const handleDrop = (index) => {
+    if (dragIndex === null) return;
+    setOverIndex(null);
+    if (dragIndex === index) {
+      setDragIndex(null);
+      return;
+    }
+    const next = [...items];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(index, 0, moved);
+    setItems(next);
+    setDragIndex(null);
+    persistOrder(next);
+  };
 
   const create = async () => {
     if (!label.trim()) return;
@@ -173,7 +292,11 @@ export function StatusManager({ statuses = [] }) {
       const response = await apiFetch("/api/admin/order-statuses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: label.trim(), clientCanEditModel }),
+        body: JSON.stringify({
+          label: label.trim(),
+          clientCanEditModel,
+          clientUploadsPhoto,
+        }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -182,6 +305,7 @@ export function StatusManager({ statuses = [] }) {
       }
       setLabel("");
       setClientCanEditModel(false);
+      setClientUploadsPhoto(false);
       refresh();
     } finally {
       setCreating(false);
@@ -194,10 +318,10 @@ export function StatusManager({ statuses = [] }) {
         <h3 className="text-sm font-bold text-ink">Nuevo estado</h3>
         <p className="mt-1 text-xs text-ink-soft">
           Los estados del sistema (Nuevo, Generando modelo, Modelo listo,
-          Confirmado por cliente, Error) no se pueden eliminar. Marca
-          &quot;Cliente puede pintar el 3D&quot; para permitir cambiar los
-          colores de las partes en ese estado; girar, hacer zoom y ver el modelo
-          siempre está disponible.
+          Confirmado por cliente, Error) no se pueden eliminar. Arrastra las
+          filas con el ícono ⠿ para cambiar el orden. &quot;Cliente puede pintar
+          el 3D&quot; permite cambiar los colores de las partes; &quot;Cliente
+          sube foto&quot; permite subir una foto que avanza al estado que elijas.
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <Input
@@ -215,6 +339,15 @@ export function StatusManager({ statuses = [] }) {
             />
             Cliente puede pintar el 3D
           </label>
+          <label className="inline-flex items-center gap-2 text-xs font-semibold text-ink-soft">
+            <input
+              type="checkbox"
+              checked={clientUploadsPhoto}
+              onChange={(event) => setClientUploadsPhoto(event.target.checked)}
+              className="h-4 w-4 accent-blush-500"
+            />
+            Cliente sube foto
+          </label>
           <Button onClick={create} disabled={creating || !label.trim()}>
             {creating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -223,6 +356,12 @@ export function StatusManager({ statuses = [] }) {
             )}
             Agregar
           </Button>
+          {reordering ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Guardando orden…
+            </span>
+          ) : null}
         </div>
         {error ? (
           <p className="mt-2 text-xs font-semibold text-red-500">{error}</p>
@@ -230,8 +369,25 @@ export function StatusManager({ statuses = [] }) {
       </div>
 
       <div className="overflow-hidden rounded-4xl border border-blush-100 glass">
-        {statuses.map((status) => (
-          <StatusRow key={status.id} status={status} onChanged={refresh} />
+        {items.map((status, index) => (
+          <StatusRow
+            key={status.id}
+            status={status}
+            statuses={items}
+            onChanged={refresh}
+            isDragging={dragIndex === index}
+            isOver={overIndex === index && dragIndex !== index}
+            onDragStart={() => setDragIndex(index)}
+            onDragEnd={() => {
+              setDragIndex(null);
+              setOverIndex(null);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (overIndex !== index) setOverIndex(index);
+            }}
+            onDrop={() => handleDrop(index)}
+          />
         ))}
       </div>
     </div>

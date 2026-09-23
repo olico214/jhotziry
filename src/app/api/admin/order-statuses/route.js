@@ -14,6 +14,8 @@ const createSchema = z.object({
   description: z.string().trim().max(200).optional().nullable(),
   sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
   clientCanEditModel: z.boolean().optional(),
+  clientUploadsPhoto: z.boolean().optional(),
+  clientPhotoNextStatus: z.string().trim().max(40).nullable().optional(),
 });
 
 export async function GET(request) {
@@ -51,6 +53,8 @@ export async function POST(request) {
       description: parsed.data.description,
       sortOrder: parsed.data.sortOrder,
       clientCanEditModel: parsed.data.clientCanEditModel,
+      clientUploadsPhoto: parsed.data.clientUploadsPhoto,
+      clientPhotoNextStatus: parsed.data.clientPhotoNextStatus,
     });
     return NextResponse.json({ ok: true, status });
   } catch (error) {

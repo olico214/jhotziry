@@ -39,6 +39,15 @@ export const DEFAULT_ORDER_STATUSES = [
     isSystem: true,
   },
   {
+    key: "received",
+    label: "Recibido",
+    sortOrder: 55,
+    clientCanEditModel: false,
+    clientUploadsPhoto: true,
+    clientPhotoNextStatus: "done",
+    isSystem: false,
+  },
+  {
     key: "done",
     label: "Completado",
     sortOrder: 60,
@@ -106,6 +115,8 @@ export async function createOrderStatus({
   description,
   sortOrder,
   clientCanEditModel,
+  clientUploadsPhoto,
+  clientPhotoNextStatus,
   isSystem,
 }) {
   const [row] = await db
@@ -116,6 +127,8 @@ export async function createOrderStatus({
       description: description || null,
       sortOrder: sortOrder ?? 0,
       clientCanEditModel: Boolean(clientCanEditModel),
+      clientUploadsPhoto: Boolean(clientUploadsPhoto),
+      clientPhotoNextStatus: clientPhotoNextStatus || null,
       isSystem: Boolean(isSystem),
     })
     .returning();

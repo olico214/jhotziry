@@ -110,3 +110,8 @@ export function postImageKey(postId, extension) {
   const ext = String(extension || "png").replace(/^\./, "").toLowerCase();
   return `posts/${postId}/image.${ext}`;
 }
+
+export function orderClientPhotoKey(orderId, extension) {
+  const ext = String(extension || "png").replace(/^\./, "").toLowerCase();
+  return `orders/${orderId}/client-photo.${ext}`;
+}
